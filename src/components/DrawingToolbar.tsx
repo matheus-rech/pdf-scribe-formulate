@@ -1,12 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pen, Square, Circle, Type, Eraser, Trash2, Save, Undo, Redo } from "lucide-react";
+import { 
+  MousePointer, Pen, Square, Circle, Type, Eraser, Trash2, Save, Undo, Redo,
+  Minus, ArrowRight, Pentagon, Highlighter, ChevronsUp, ChevronsDown, Trash
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+export type DrawingTool = 'select' | 'pen' | 'line' | 'arrow' | 'rectangle' | 'circle' | 'polygon' | 'text' | 'highlight' | 'eraser';
+
 interface DrawingToolbarProps {
-  activeTool: "select" | "pen" | "rectangle" | "circle" | "text" | "eraser";
-  onToolChange: (tool: "select" | "pen" | "rectangle" | "circle" | "text" | "eraser") => void;
+  activeTool: DrawingTool;
+  onToolChange: (tool: DrawingTool) => void;
   activeColor: string;
   onColorChange: (color: string) => void;
   strokeWidth: number;
@@ -17,6 +22,10 @@ interface DrawingToolbarProps {
   onSave: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  selectedObject?: any;
+  onBringToFront?: () => void;
+  onSendToBack?: () => void;
+  onDeleteSelected?: () => void;
 }
 
 const COLORS = [
@@ -41,6 +50,10 @@ export const DrawingToolbar = ({
   onSave,
   canUndo,
   canRedo,
+  selectedObject,
+  onBringToFront,
+  onSendToBack,
+  onDeleteSelected,
 }: DrawingToolbarProps) => {
   return (
     <div className="flex items-center gap-2 p-3 bg-card border border-border rounded-lg shadow-sm flex-wrap">
@@ -50,20 +63,45 @@ export const DrawingToolbar = ({
       
       <Separator orientation="vertical" className="h-6" />
       
+      {/* Selection and Drawing Tools */}
       <div className="flex gap-1">
+        <Button
+          variant={activeTool === "select" ? "default" : "outline"}
+          size="sm"
+          onClick={() => onToolChange("select")}
+          title="Select & Move (V)"
+        >
+          <MousePointer className="h-4 w-4" />
+        </Button>
         <Button
           variant={activeTool === "pen" ? "default" : "outline"}
           size="sm"
           onClick={() => onToolChange("pen")}
-          title="Freehand Drawing"
+          title="Freehand Drawing (P)"
         >
           <Pen className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={activeTool === "line" ? "default" : "outline"}
+          size="sm"
+          onClick={() => onToolChange("line")}
+          title="Line (L)"
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={activeTool === "arrow" ? "default" : "outline"}
+          size="sm"
+          onClick={() => onToolChange("arrow")}
+          title="Arrow (A)"
+        >
+          <ArrowRight className="h-4 w-4" />
         </Button>
         <Button
           variant={activeTool === "rectangle" ? "default" : "outline"}
           size="sm"
           onClick={() => onToolChange("rectangle")}
-          title="Rectangle"
+          title="Rectangle (R)"
         >
           <Square className="h-4 w-4" />
         </Button>
@@ -71,15 +109,31 @@ export const DrawingToolbar = ({
           variant={activeTool === "circle" ? "default" : "outline"}
           size="sm"
           onClick={() => onToolChange("circle")}
-          title="Circle"
+          title="Circle (C)"
         >
           <Circle className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={activeTool === "polygon" ? "default" : "outline"}
+          size="sm"
+          onClick={() => onToolChange("polygon")}
+          title="Polygon"
+        >
+          <Pentagon className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={activeTool === "highlight" ? "default" : "outline"}
+          size="sm"
+          onClick={() => onToolChange("highlight")}
+          title="Highlight (H)"
+        >
+          <Highlighter className="h-4 w-4" />
         </Button>
         <Button
           variant={activeTool === "text" ? "default" : "outline"}
           size="sm"
           onClick={() => onToolChange("text")}
-          title="Text Comment"
+          title="Text (T)"
         >
           <Type className="h-4 w-4" />
         </Button>
@@ -87,7 +141,7 @@ export const DrawingToolbar = ({
           variant={activeTool === "eraser" ? "default" : "outline"}
           size="sm"
           onClick={() => onToolChange("eraser")}
-          title="Eraser"
+          title="Eraser (E)"
         >
           <Eraser className="h-4 w-4" />
         </Button>
@@ -154,6 +208,39 @@ export const DrawingToolbar = ({
 
       <Separator orientation="vertical" className="h-6" />
 
+      {/* Object Management */}
+      {selectedObject && (
+        <>
+          <div className="flex gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDeleteSelected}
+              title="Delete Selected (Del)"
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onBringToFront}
+              title="Bring to Front"
+            >
+              <ChevronsUp className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSendToBack}
+              title="Send to Back"
+            >
+              <ChevronsDown className="h-4 w-4" />
+            </Button>
+          </div>
+          <Separator orientation="vertical" className="h-6" />
+        </>
+      )}
+
       <Button
         variant="outline"
         size="sm"
@@ -173,7 +260,7 @@ export const DrawingToolbar = ({
         title="Save Annotations"
       >
         <Save className="h-4 w-4" />
-        Save Annotations
+        Save
       </Button>
     </div>
   );

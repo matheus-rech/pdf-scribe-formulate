@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -11,9 +11,12 @@ import type { RenderHighlightContentProps, RenderHighlightsProps } from '@react-
 import type { ExtractionEntry } from "@/pages/Index";
 import { extractAnnotationsFromPDF, type PDFAnnotation } from "@/lib/annotationParser";
 import { AnnotationImportDialog } from "./AnnotationImportDialog";
-import { DrawingToolbar } from "./DrawingToolbar";
+import { DrawingToolbar, type DrawingTool } from "./DrawingToolbar";
+import { useAnnotationCanvas } from "@/hooks/useAnnotationCanvas";
+import { usePageAnnotations } from "@/hooks/usePageAnnotations";
+import { useCanvasHistory } from "@/hooks/useCanvasHistory";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import * as pdfjsLib from "pdfjs-dist";
-import { Canvas as FabricCanvas, PencilBrush, Rect, Circle, IText } from "fabric";
 
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/highlight/lib/styles/index.css';
@@ -54,6 +57,7 @@ export const PDFViewer = ({
   const [fileUrl, setFileUrl] = useState<string>("");
   const [regionMode, setRegionMode] = useState(false);
   const [imageMode, setImageMode] = useState(false);
+  const [textSelectionMode, setTextSelectionMode] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -67,12 +71,104 @@ export const PDFViewer = ({
   // Drawing mode states
   const [drawingMode, setDrawingMode] = useState(false);
   const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
-  const [drawingTool, setDrawingTool] = useState<"select" | "pen" | "rectangle" | "circle" | "text" | "eraser">("pen");
-  const [drawingColor, setDrawingColor] = useState("#ef4444");
-  const [strokeWidth, setStrokeWidth] = useState(3);
-  const [history, setHistory] = useState<any[]>([]);
-  const [historyStep, setHistoryStep] = useState(-1);
+  const [pageDimensions, setPageDimensions] = useState({ width: 800, height: 1000 });
+
+  // Use custom hooks
+  const { 
+    savePageAnnotation, 
+    getPageAnnotation, 
+    clearPageAnnotation, 
+    hasAnnotation 
+  } = usePageAnnotations();
+
+  const {
+    fabricCanvas,
+    activeTool,
+    setActiveTool,
+    drawingColor,
+    setDrawingColor,
+    strokeWidth,
+    setStrokeWidth,
+    selectedObject,
+    addShape,
+    deleteSelected,
+    bringToFront,
+    sendToBack,
+    clearCanvas,
+  } = useAnnotationCanvas(drawingCanvasRef, pageDimensions.width, pageDimensions.height, drawingMode);
+
+  const {
+    saveState,
+    undo,
+    redo,
+    clearHistory,
+    initializeHistory,
+    canUndo,
+    canRedo
+  } = useCanvasHistory(fabricCanvas);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onDelete: deleteSelected,
+    onUndo: undo,
+    onRedo: redo,
+    onEscape: () => {
+      setDrawingMode(false);
+      setRegionMode(false);
+      setImageMode(false);
+      setTextSelectionMode(false);
+    },
+  }, drawingMode);
+
+  // Save annotations when switching pages
+  const saveCurrentPageAnnotations = useCallback(() => {
+    if (!fabricCanvas || !drawingMode) return;
+    
+    const json = fabricCanvas.toJSON();
+    const thumbnail = fabricCanvas.toDataURL({ format: 'png', quality: 0.5, multiplier: 1 });
+    savePageAnnotation(currentPage, json, thumbnail);
+  }, [fabricCanvas, drawingMode, currentPage, savePageAnnotation]);
+
+  // Load annotations for current page
+  useEffect(() => {
+    if (!fabricCanvas || !drawingMode) return;
+
+    const annotation = getPageAnnotation(currentPage);
+    if (annotation && annotation.canvasJSON) {
+      fabricCanvas.loadFromJSON(annotation.canvasJSON, () => {
+        fabricCanvas.renderAll();
+        initializeHistory();
+      });
+    } else {
+      clearCanvas();
+      initializeHistory();
+    }
+  }, [currentPage, fabricCanvas, drawingMode, getPageAnnotation, initializeHistory, clearCanvas]);
+
+  // Auto-save on canvas changes (debounced through history)
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    const handleObjectEvent = () => {
+      saveState();
+      // Auto-save to page annotations
+      if (drawingMode) {
+        const json = fabricCanvas.toJSON();
+        const thumbnail = fabricCanvas.toDataURL({ format: 'png', quality: 0.5, multiplier: 1 });
+        savePageAnnotation(currentPage, json, thumbnail);
+      }
+    };
+
+    fabricCanvas.on('object:added', handleObjectEvent);
+    fabricCanvas.on('object:modified', handleObjectEvent);
+    fabricCanvas.on('object:removed', handleObjectEvent);
+
+    return () => {
+      fabricCanvas.off('object:added', handleObjectEvent);
+      fabricCanvas.off('object:modified', handleObjectEvent);
+      fabricCanvas.off('object:removed', handleObjectEvent);
+    };
+  }, [fabricCanvas, saveState, drawingMode, currentPage, savePageAnnotation]);
 
   // Extract text from PDF when file loads
   useEffect(() => {
@@ -117,68 +213,6 @@ export const PDFViewer = ({
       URL.revokeObjectURL(url);
     };
   }, [file]);
-
-  // Initialize Fabric.js canvas for drawing
-  useEffect(() => {
-    if (!drawingMode || !drawingCanvasRef.current) {
-      if (fabricCanvas) {
-        fabricCanvas.dispose();
-        setFabricCanvas(null);
-      }
-      return;
-    }
-
-    const canvas = new FabricCanvas(drawingCanvasRef.current, {
-      width: 800,
-      height: 1000,
-      isDrawingMode: false,
-    });
-
-    // Initialize brush
-    const brush = new PencilBrush(canvas);
-    brush.color = drawingColor;
-    brush.width = strokeWidth;
-    canvas.freeDrawingBrush = brush;
-
-    setFabricCanvas(canvas);
-    toast.success("Drawing mode activated!");
-
-    // Track history for undo/redo
-    canvas.on('object:added', () => {
-      if (!canvas.isDrawingMode) {
-        const json = canvas.toJSON();
-        setHistory(prev => {
-          const newHistory = prev.slice(0, historyStep + 1);
-          return [...newHistory, json];
-        });
-        setHistoryStep(prev => prev + 1);
-      }
-    });
-
-    return () => {
-      canvas.dispose();
-    };
-  }, [drawingMode]);
-
-  // Update drawing tool
-  useEffect(() => {
-    if (!fabricCanvas) return;
-
-    fabricCanvas.isDrawingMode = drawingTool === "pen";
-    
-    if (drawingTool === "pen" && fabricCanvas.freeDrawingBrush) {
-      fabricCanvas.freeDrawingBrush.color = drawingColor;
-      fabricCanvas.freeDrawingBrush.width = strokeWidth;
-    } else if (drawingTool === "eraser") {
-      fabricCanvas.isDrawingMode = true;
-      if (fabricCanvas.freeDrawingBrush) {
-        fabricCanvas.freeDrawingBrush.color = "#ffffff";
-        fabricCanvas.freeDrawingBrush.width = strokeWidth * 3;
-      }
-    } else if (drawingTool === "select") {
-      fabricCanvas.isDrawingMode = false;
-    }
-  }, [drawingTool, drawingColor, strokeWidth, fabricCanvas]);
 
   // Highlight plugin configuration
   const renderHighlightContent = (props: RenderHighlightContentProps) => {
@@ -251,72 +285,13 @@ export const PDFViewer = ({
   const { ShowSearchPopover } = searchPluginInstance;
 
   // Drawing tool handlers
-  const handleDrawingToolChange = (tool: typeof drawingTool) => {
-    setDrawingTool(tool);
-
-    if (!fabricCanvas) return;
-
-    if (tool === "rectangle") {
-      const rect = new Rect({
-        left: 100,
-        top: 100,
-        fill: "transparent",
-        stroke: drawingColor,
-        strokeWidth: strokeWidth,
-        width: 150,
-        height: 100,
-      });
-      fabricCanvas.add(rect);
-      fabricCanvas.setActiveObject(rect);
-    } else if (tool === "circle") {
-      const circle = new Circle({
-        left: 100,
-        top: 100,
-        fill: "transparent",
-        stroke: drawingColor,
-        strokeWidth: strokeWidth,
-        radius: 50,
-      });
-      fabricCanvas.add(circle);
-      fabricCanvas.setActiveObject(circle);
-    } else if (tool === "text") {
-      const text = new IText("Add text...", {
-        left: 100,
-        top: 100,
-        fill: drawingColor,
-        fontSize: 20,
-        fontFamily: "Arial",
-      });
-      fabricCanvas.add(text);
-      fabricCanvas.setActiveObject(text);
-      text.enterEditing();
+  const handleDrawingToolChange = (tool: DrawingTool) => {
+    setActiveTool(tool);
+    
+    // Add shapes immediately for shape tools
+    if (['rectangle', 'circle', 'text', 'highlight', 'polygon'].includes(tool)) {
+      addShape(tool);
     }
-  };
-
-  const handleClearDrawing = () => {
-    if (!fabricCanvas) return;
-    fabricCanvas.clear();
-    setHistory([]);
-    setHistoryStep(-1);
-    toast.success("Annotations cleared");
-  };
-
-  const handleUndo = () => {
-    if (!fabricCanvas || historyStep <= 0) return;
-    const previousState = history[historyStep - 1];
-    fabricCanvas.loadFromJSON(previousState, () => {
-      fabricCanvas.renderAll();
-      setHistoryStep(prev => prev - 1);
-    });
-  };
-
-  const handleRedo = () => {
-    if (!fabricCanvas || historyStep >= history.length - 1) return;
-    const nextState = history[historyStep + 1];
-    fabricCanvas.loadFromJSON(nextState, () => {
-      fabricCanvas.renderAll();
-      setHistoryStep(prev => prev + 1);
-    });
   };
 
   const handleSaveAnnotations = async () => {
@@ -350,16 +325,17 @@ export const PDFViewer = ({
       });
 
       toast.success(`Annotations saved to ${activeField}`);
-      handleClearDrawing();
+      clearCanvas();
+      clearHistory();
     } catch (error) {
       console.error("Error saving annotations:", error);
       toast.error("Failed to save annotations");
     }
   };
 
-  // Handle text selection from the PDF
+  // Handle text selection from the PDF (only when not in other modes)
   const handleTextSelection = () => {
-    if (!activeField || regionMode || imageMode) return;
+    if (!activeField || regionMode || imageMode || drawingMode) return;
 
     const selection = window.getSelection();
     const selectedText = selection?.toString().trim();
@@ -609,10 +585,26 @@ export const PDFViewer = ({
 
         <div className="flex gap-1 border-l border-border pl-2">
           <Button
+            variant={textSelectionMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setTextSelectionMode(!textSelectionMode);
+              setRegionMode(false);
+              setImageMode(false);
+              setDrawingMode(false);
+            }}
+            disabled={!file}
+            className="gap-2"
+          >
+            <FileText className="h-4 w-4" />
+            Text
+          </Button>
+          <Button
             variant={regionMode ? "default" : "outline"}
             size="sm"
             onClick={() => {
               setRegionMode(!regionMode);
+              setTextSelectionMode(false);
               setImageMode(false);
               setDrawingMode(false);
             }}
@@ -627,6 +619,7 @@ export const PDFViewer = ({
             size="sm"
             onClick={() => {
               setImageMode(!imageMode);
+              setTextSelectionMode(false);
               setRegionMode(false);
               setDrawingMode(false);
             }}
@@ -641,6 +634,7 @@ export const PDFViewer = ({
             size="sm"
             onClick={() => {
               setDrawingMode(!drawingMode);
+              setTextSelectionMode(false);
               setRegionMode(false);
               setImageMode(false);
             }}
@@ -727,18 +721,26 @@ export const PDFViewer = ({
         {drawingMode && (
           <div className="mb-4">
             <DrawingToolbar
-              activeTool={drawingTool}
+              activeTool={activeTool}
               onToolChange={handleDrawingToolChange}
               activeColor={drawingColor}
               onColorChange={setDrawingColor}
               strokeWidth={strokeWidth}
               onStrokeWidthChange={setStrokeWidth}
-              onClear={handleClearDrawing}
-              onUndo={handleUndo}
-              onRedo={handleRedo}
+              onClear={() => {
+                clearCanvas();
+                clearHistory();
+                toast.success("Annotations cleared");
+              }}
+              onUndo={undo}
+              onRedo={redo}
               onSave={handleSaveAnnotations}
-              canUndo={historyStep > 0}
-              canRedo={historyStep < history.length - 1}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              selectedObject={selectedObject}
+              onBringToFront={bringToFront}
+              onSendToBack={sendToBack}
+              onDeleteSelected={deleteSelected}
             />
           </div>
         )}
