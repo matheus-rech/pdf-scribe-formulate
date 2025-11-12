@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Copy, FileText, Sparkles } from "lucide-react";
+import { Loader2, Copy, FileText, Sparkles, ShieldCheck } from "lucide-react";
 import { extractTextFromImage } from "@/lib/ocr";
 import { detectTableStructure } from "@/lib/tableParser";
 import { TableParserView } from "./TableParserView";
+import { AIVisionEnhancement } from "./AIVisionEnhancement";
+import { DataValidationView } from "./DataValidationView";
 import { toast } from "sonner";
 
 interface OCRDialogProps {
@@ -23,6 +26,7 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
   const [hasRun, setHasRun] = useState(false);
   const [hasTableStructure, setHasTableStructure] = useState(false);
   const [activeTab, setActiveTab] = useState("text");
+  const [parsedTable, setParsedTable] = useState<any>(null);
 
   const handleRunOCR = async () => {
     setIsProcessing(true);
@@ -39,6 +43,9 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
         setHasTableStructure(hasTable);
         
         if (hasTable) {
+          const { parseTableFromText } = await import("@/lib/tableParser");
+          const parsed = parseTableFromText(text);
+          setParsedTable(parsed);
           setActiveTab("table");
           toast.success("Table structure detected! Check the Table tab.");
         } else {
@@ -128,15 +135,25 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
               </div>
             ) : (
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className={hasTableStructure ? "grid w-full grid-cols-2" : "w-full"}>
+                <TabsList className={`${hasTableStructure ? "grid w-full grid-cols-4" : "w-full"}`}>
                   <TabsTrigger value="text">Raw Text</TabsTrigger>
                   {hasTableStructure && (
-                    <TabsTrigger value="table" className="gap-2">
-                      Table
-                      <span className="px-1.5 py-0.5 rounded text-xs bg-success/20 text-success">
-                        Detected
-                      </span>
-                    </TabsTrigger>
+                    <>
+                      <TabsTrigger value="table" className="gap-2">
+                        Table
+                        <span className="px-1.5 py-0.5 rounded text-xs bg-success/20 text-success">
+                          Detected
+                        </span>
+                      </TabsTrigger>
+                      <TabsTrigger value="ai" className="gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        AI Vision
+                      </TabsTrigger>
+                      <TabsTrigger value="validation" className="gap-1">
+                        <ShieldCheck className="h-3 w-3" />
+                        Validate
+                      </TabsTrigger>
+                    </>
                   )}
                 </TabsList>
 
@@ -152,17 +169,56 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
                 </TabsContent>
 
                 {hasTableStructure && (
-                  <TabsContent value="table">
-                    <ScrollArea className="h-[350px]">
-                      <TableParserView 
-                        text={extractedText}
-                        onExtractTable={(table) => {
-                          toast.success("Table data saved");
-                          // Could save to extraction data here
-                        }}
-                      />
-                    </ScrollArea>
-                  </TabsContent>
+                  <>
+                    <TabsContent value="table">
+                      <ScrollArea className="h-[350px]">
+                        <TableParserView 
+                          text={extractedText}
+                          onExtractTable={(table) => {
+                            setParsedTable(table);
+                            toast.success("Table data saved");
+                          }}
+                        />
+                      </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent value="ai">
+                      <ScrollArea className="h-[350px]">
+                        <AIVisionEnhancement
+                          imageData={imageData}
+                          onEnhancedData={(data) => {
+                            if (data.headers && data.rows) {
+                              const enhanced = {
+                                headers: data.headers,
+                                rows: data.rows,
+                                rowCount: data.rows.length,
+                                columnCount: data.headers.length,
+                              };
+                              setParsedTable(enhanced);
+                              setExtractedText(JSON.stringify(data, null, 2));
+                            }
+                          }}
+                        />
+                      </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent value="validation">
+                      <ScrollArea className="h-[350px]">
+                        {parsedTable ? (
+                          <DataValidationView 
+                            table={parsedTable}
+                            imageData={imageData}
+                          />
+                        ) : (
+                          <Card className="p-6 text-center">
+                            <p className="text-sm text-muted-foreground">
+                              Parse table first to enable validation
+                            </p>
+                          </Card>
+                        )}
+                      </ScrollArea>
+                    </TabsContent>
+                  </>
                 )}
               </Tabs>
             )}
