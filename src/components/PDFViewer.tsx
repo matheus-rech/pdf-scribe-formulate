@@ -9,6 +9,7 @@ import type { ExtractionEntry } from "@/pages/Index";
 import { SearchPanel } from "./SearchPanel";
 import { extractAnnotationsFromPDF, type PDFAnnotation } from "@/lib/annotationParser";
 import { AnnotationImportDialog } from "./AnnotationImportDialog";
+import { ExtractionMarker } from "./ExtractionMarker";
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -540,34 +541,22 @@ export const PDFViewer = ({
                 </div>
               )}
 
-              {/* Extraction markers */}
-              {extractions
-                .filter((e) => e.page === currentPage && e.coordinates)
-                .map((extraction) => (
-                  <div
-                    key={extraction.id}
-                    className={`absolute border-2 pointer-events-auto cursor-pointer transition-all hover:shadow-lg group ${
-                      extraction.method === "manual"
-                        ? "border-extraction-manual bg-extraction-manual/10 hover:bg-extraction-manual/20"
-                        : extraction.method === "ai"
-                        ? "border-extraction-ai bg-extraction-ai/10 hover:bg-extraction-ai/20"
-                        : extraction.method === "image"
-                        ? "border-extraction-image bg-extraction-image/10 hover:bg-extraction-image/20"
-                        : "border-extraction-search bg-extraction-search/10 hover:bg-extraction-search/20"
-                    }`}
-                    style={{
-                      left: extraction.coordinates!.x,
-                      top: extraction.coordinates!.y,
-                      width: extraction.coordinates!.width,
-                      height: extraction.coordinates!.height,
-                    }}
-                    title={`${extraction.fieldName} (${extraction.method})`}
-                  >
-                    <div className="absolute -top-7 left-0 bg-card border border-border rounded px-2 py-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity shadow-lg whitespace-nowrap z-10">
-                      📋 {extraction.fieldName}
-                    </div>
-                  </div>
-                ))}
+              {/* Extraction markers overlay */}
+              <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                {extractions
+                  .filter(ext => ext.page === currentPage && ext.coordinates)
+                  .map(extraction => (
+                    <ExtractionMarker
+                      key={extraction.id}
+                      extraction={extraction}
+                      onClick={() => {
+                        toast.info(`Extraction: ${extraction.fieldName}`, {
+                          description: extraction.text
+                        });
+                      }}
+                    />
+                  ))}
+              </div>
             </div>
           </div>
         )}

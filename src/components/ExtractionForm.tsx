@@ -20,14 +20,46 @@ interface ExtractionFormProps {
 }
 
 const STEPS = [
-  { id: 1, title: "Study Metadata", fields: ["citation", "doi", "pmid", "journal", "year"] },
-  { id: 2, title: "PICO-T Framework", fields: ["population", "intervention", "comparator", "outcomes", "timing"] },
-  { id: 3, title: "Demographics", fields: ["sampleSize", "age", "gender", "comorbidities"] },
-  { id: 4, title: "Imaging Data", fields: ["volumeMeasurements", "swellingIndices"] },
-  { id: 5, title: "Interventions", fields: ["surgicalProcedures", "medicalManagement"] },
-  { id: 6, title: "Study Arms", fields: ["controlGroup", "treatmentGroup"] },
-  { id: 7, title: "Outcomes", fields: ["mortality", "mrsDistribution"] },
-  { id: 8, title: "Complications", fields: ["adverseEvents", "predictors"] },
+  { 
+    id: 1, 
+    title: "Study Identification", 
+    fields: ["citation", "doi", "pmid", "journal", "year", "country", "centers", "funding"]
+  },
+  { 
+    id: 2, 
+    title: "PICO-T Framework", 
+    fields: ["population", "intervention", "comparator", "outcomes", "timing", "studyType"]
+  },
+  { 
+    id: 3, 
+    title: "Demographics & Baseline", 
+    fields: ["sampleSize", "treatmentN", "controlN", "age", "gender", "inclusionCriteria", "exclusionCriteria", "comorbidities"]
+  },
+  { 
+    id: 4, 
+    title: "Imaging & Volume Measurements", 
+    fields: ["imagingModality", "hematomaVolume", "edemaVolume", "ivhVolume", "midlineShift", "hydrocephalus"]
+  },
+  { 
+    id: 5, 
+    title: "Treatment Details", 
+    fields: ["surgicalProcedures", "surgicalTiming", "medicalManagement", "controlIntervention"]
+  },
+  { 
+    id: 6, 
+    title: "Outcomes & Functional Scales", 
+    fields: ["primaryOutcome", "secondaryOutcomes", "followUpDuration", "mortality", "mRS0", "mRS1", "mRS2", "mRS3", "mRS4", "mRS5", "mRS6", "otherScales"]
+  },
+  { 
+    id: 7, 
+    title: "Adverse Events & Predictors", 
+    fields: ["complications", "adverseEventsRate", "predictors", "statisticalSignificance"]
+  },
+  { 
+    id: 8, 
+    title: "Quality & Notes", 
+    fields: ["strengths", "limitations", "biasAssessment", "qualityScore", "reviewerNotes"]
+  },
 ];
 
 export const ExtractionForm = ({
@@ -162,7 +194,7 @@ export const ExtractionForm = ({
           </p>
 
           <div className="space-y-4">
-            {/* Step 1: Study Metadata */}
+            {/* Step 1: Study Identification */}
             {currentStep === 1 && (
               <>
                 <div className="space-y-2">
@@ -181,21 +213,15 @@ export const ExtractionForm = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="doi">DOI</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="doi"
-                        value={getFieldValue("doi")}
-                        onChange={(e) => handleFieldChange("doi", e.target.value)}
-                        onFocus={() => onFieldFocus("doi")}
-                        onBlur={() => onFieldFocus(null)}
-                        className={activeField === "doi" ? "ring-2 ring-primary" : ""}
-                        placeholder="10.1000/xyz123"
-                      />
-                      <Button variant="outline" size="sm" className="shrink-0 gap-1">
-                        <Sparkles className="h-3 w-3" />
-                        AI
-                      </Button>
-                    </div>
+                    <Input
+                      id="doi"
+                      value={getFieldValue("doi")}
+                      onChange={(e) => handleFieldChange("doi", e.target.value)}
+                      onFocus={() => onFieldFocus("doi")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "doi" ? "ring-2 ring-primary" : ""}
+                      placeholder="10.1000/xyz123"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="pmid">PMID</Label>
@@ -236,6 +262,51 @@ export const ExtractionForm = ({
                       placeholder="2024"
                     />
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country</Label>
+                    <Input
+                      id="country"
+                      value={getFieldValue("country")}
+                      onChange={(e) => handleFieldChange("country", e.target.value)}
+                      onFocus={() => onFieldFocus("country")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "country" ? "ring-2 ring-primary" : ""}
+                      placeholder="Study location"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="centers">Centers</Label>
+                    <Select
+                      value={getFieldValue("centers")}
+                      onValueChange={(value) => handleFieldChange("centers", value)}
+                    >
+                      <SelectTrigger
+                        className={activeField === "centers" ? "ring-2 ring-primary" : ""}
+                        onFocus={() => onFieldFocus("centers")}
+                        onBlur={() => onFieldFocus(null)}
+                      >
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="single">Single-center</SelectItem>
+                        <SelectItem value="multi">Multi-center</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="funding">Funding Sources</Label>
+                  <Input
+                    id="funding"
+                    value={getFieldValue("funding")}
+                    onChange={(e) => handleFieldChange("funding", e.target.value)}
+                    onFocus={() => onFieldFocus("funding")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "funding" ? "ring-2 ring-primary" : ""}
+                    placeholder="Funding and conflicts of interest"
+                  />
                 </div>
               </>
             )}
@@ -337,10 +408,34 @@ export const ExtractionForm = ({
                     placeholder="Study duration and follow-up"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="studyType">Study Type</Label>
+                  <Select
+                    value={getFieldValue("studyType")}
+                    onValueChange={(value) => handleFieldChange("studyType", value)}
+                  >
+                    <SelectTrigger
+                      className={activeField === "studyType" ? "ring-2 ring-primary" : ""}
+                      onFocus={() => onFieldFocus("studyType")}
+                      onBlur={() => onFieldFocus(null)}
+                    >
+                      <SelectValue placeholder="Select study design..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rct">Randomized Controlled Trial (RCT)</SelectItem>
+                      <SelectItem value="cohort">Cohort Study</SelectItem>
+                      <SelectItem value="case-control">Case-Control Study</SelectItem>
+                      <SelectItem value="cross-sectional">Cross-Sectional Study</SelectItem>
+                      <SelectItem value="case-series">Case Series</SelectItem>
+                      <SelectItem value="systematic-review">Systematic Review</SelectItem>
+                      <SelectItem value="meta-analysis">Meta-Analysis</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </>
             )}
 
-            {/* Step 3: Demographics */}
+            {/* Step 3: Demographics & Baseline */}
             {currentStep === 3 && (
               <>
                 <Card className="p-4 bg-info/5 border-info/20 mb-4">
@@ -361,18 +456,46 @@ export const ExtractionForm = ({
                   </div>
                 </Card>
 
-                <div className="space-y-2">
-                  <Label htmlFor="sampleSize">Sample Size</Label>
-                  <Input
-                    id="sampleSize"
-                    type="number"
-                    value={getFieldValue("sampleSize")}
-                    onChange={(e) => handleFieldChange("sampleSize", e.target.value)}
-                    onFocus={() => onFieldFocus("sampleSize")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "sampleSize" ? "ring-2 ring-primary" : ""}
-                    placeholder="Total number of participants"
-                  />
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sampleSize">Total Sample Size</Label>
+                    <Input
+                      id="sampleSize"
+                      type="number"
+                      value={getFieldValue("sampleSize")}
+                      onChange={(e) => handleFieldChange("sampleSize", e.target.value)}
+                      onFocus={() => onFieldFocus("sampleSize")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "sampleSize" ? "ring-2 ring-primary" : ""}
+                      placeholder="Total N"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="treatmentN">Treatment Group N</Label>
+                    <Input
+                      id="treatmentN"
+                      type="number"
+                      value={getFieldValue("treatmentN")}
+                      onChange={(e) => handleFieldChange("treatmentN", e.target.value)}
+                      onFocus={() => onFieldFocus("treatmentN")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "treatmentN" ? "ring-2 ring-primary" : ""}
+                      placeholder="n"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="controlN">Control Group N</Label>
+                    <Input
+                      id="controlN"
+                      type="number"
+                      value={getFieldValue("controlN")}
+                      onChange={(e) => handleFieldChange("controlN", e.target.value)}
+                      onFocus={() => onFieldFocus("controlN")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "controlN" ? "ring-2 ring-primary" : ""}
+                      placeholder="n"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="age">Age (mean ± SD or median [IQR])</Label>
@@ -399,6 +522,32 @@ export const ExtractionForm = ({
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="inclusionCriteria">Inclusion Criteria</Label>
+                  <Textarea
+                    id="inclusionCriteria"
+                    value={getFieldValue("inclusionCriteria")}
+                    onChange={(e) => handleFieldChange("inclusionCriteria", e.target.value)}
+                    onFocus={() => onFieldFocus("inclusionCriteria")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "inclusionCriteria" ? "ring-2 ring-primary" : ""}
+                    rows={3}
+                    placeholder="Patient inclusion criteria"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="exclusionCriteria">Exclusion Criteria</Label>
+                  <Textarea
+                    id="exclusionCriteria"
+                    value={getFieldValue("exclusionCriteria")}
+                    onChange={(e) => handleFieldChange("exclusionCriteria", e.target.value)}
+                    onFocus={() => onFieldFocus("exclusionCriteria")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "exclusionCriteria" ? "ring-2 ring-primary" : ""}
+                    rows={3}
+                    placeholder="Patient exclusion criteria"
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="comorbidities">Comorbidities</Label>
                   <Textarea
                     id="comorbidities"
@@ -408,37 +557,382 @@ export const ExtractionForm = ({
                     onBlur={() => onFieldFocus(null)}
                     className={activeField === "comorbidities" ? "ring-2 ring-primary" : ""}
                     rows={4}
-                    placeholder="List comorbidities and percentages"
+                    placeholder="Hypertension (%), Diabetes (%), Smoking (%), etc."
                   />
                 </div>
               </>
             )}
 
-            {/* Additional steps 4-8 would follow similar patterns */}
-            {currentStep > 3 && (
-              <Card className="p-8 text-center">
-                <h3 className="font-semibold mb-2">Step {currentStep}: {currentStepData.title}</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  This section is under construction. Follow the same pattern as previous steps.
-                </p>
-                <div className="space-y-3">
-                  {currentStepData.fields.map(field => (
-                    <div key={field} className="space-y-2">
-                      <Label htmlFor={field} className="capitalize">{field.replace(/([A-Z])/g, ' $1').trim()}</Label>
-                      <Textarea
-                        id={field}
-                        value={getFieldValue(field)}
-                        onChange={(e) => handleFieldChange(field, e.target.value)}
-                        onFocus={() => onFieldFocus(field)}
-                        onBlur={() => onFieldFocus(null)}
-                        className={activeField === field ? "ring-2 ring-primary" : ""}
-                        rows={2}
-                        placeholder={`Enter ${field}...`}
-                      />
-                    </div>
-                  ))}
+            {/* Step 4: Imaging & Volume Measurements */}
+            {currentStep === 4 && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="imagingModality">Imaging Modality</Label>
+                  <Input
+                    id="imagingModality"
+                    value={getFieldValue("imagingModality")}
+                    onChange={(e) => handleFieldChange("imagingModality", e.target.value)}
+                    onFocus={() => onFieldFocus("imagingModality")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "imagingModality" ? "ring-2 ring-primary" : ""}
+                    placeholder="CT, MRI, etc."
+                  />
                 </div>
-              </Card>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="hematomaVolume">Hematoma Volume</Label>
+                    <Input
+                      id="hematomaVolume"
+                      value={getFieldValue("hematomaVolume")}
+                      onChange={(e) => handleFieldChange("hematomaVolume", e.target.value)}
+                      onFocus={() => onFieldFocus("hematomaVolume")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "hematomaVolume" ? "ring-2 ring-primary" : ""}
+                      placeholder="Volume in mL or cm³"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edemaVolume">Edema Volume</Label>
+                    <Input
+                      id="edemaVolume"
+                      value={getFieldValue("edemaVolume")}
+                      onChange={(e) => handleFieldChange("edemaVolume", e.target.value)}
+                      onFocus={() => onFieldFocus("edemaVolume")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "edemaVolume" ? "ring-2 ring-primary" : ""}
+                      placeholder="Volume in mL or cm³"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ivhVolume">IVH Volume</Label>
+                    <Input
+                      id="ivhVolume"
+                      value={getFieldValue("ivhVolume")}
+                      onChange={(e) => handleFieldChange("ivhVolume", e.target.value)}
+                      onFocus={() => onFieldFocus("ivhVolume")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "ivhVolume" ? "ring-2 ring-primary" : ""}
+                      placeholder="Intraventricular hemorrhage"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="midlineShift">Midline Shift</Label>
+                    <Input
+                      id="midlineShift"
+                      value={getFieldValue("midlineShift")}
+                      onChange={(e) => handleFieldChange("midlineShift", e.target.value)}
+                      onFocus={() => onFieldFocus("midlineShift")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "midlineShift" ? "ring-2 ring-primary" : ""}
+                      placeholder="Shift in mm"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hydrocephalus">Hydrocephalus</Label>
+                  <Select
+                    value={getFieldValue("hydrocephalus")}
+                    onValueChange={(value) => handleFieldChange("hydrocephalus", value)}
+                  >
+                    <SelectTrigger
+                      className={activeField === "hydrocephalus" ? "ring-2 ring-primary" : ""}
+                      onFocus={() => onFieldFocus("hydrocephalus")}
+                      onBlur={() => onFieldFocus(null)}
+                    >
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="present">Present</SelectItem>
+                      <SelectItem value="obstructive">Obstructive</SelectItem>
+                      <SelectItem value="communicating">Communicating</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {/* Step 5: Treatment Details */}
+            {currentStep === 5 && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="surgicalProcedures">Surgical Procedures</Label>
+                  <Textarea
+                    id="surgicalProcedures"
+                    value={getFieldValue("surgicalProcedures")}
+                    onChange={(e) => handleFieldChange("surgicalProcedures", e.target.value)}
+                    onFocus={() => onFieldFocus("surgicalProcedures")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "surgicalProcedures" ? "ring-2 ring-primary" : ""}
+                    rows={4}
+                    placeholder="Craniotomy, EVD, Minimally Invasive Surgery, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="surgicalTiming">Surgical Timing</Label>
+                  <Input
+                    id="surgicalTiming"
+                    value={getFieldValue("surgicalTiming")}
+                    onChange={(e) => handleFieldChange("surgicalTiming", e.target.value)}
+                    onFocus={() => onFieldFocus("surgicalTiming")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "surgicalTiming" ? "ring-2 ring-primary" : ""}
+                    placeholder="Time from symptom onset to surgery"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="medicalManagement">Medical Management</Label>
+                  <Textarea
+                    id="medicalManagement"
+                    value={getFieldValue("medicalManagement")}
+                    onChange={(e) => handleFieldChange("medicalManagement", e.target.value)}
+                    onFocus={() => onFieldFocus("medicalManagement")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "medicalManagement" ? "ring-2 ring-primary" : ""}
+                    rows={4}
+                    placeholder="Blood pressure control, coagulation management, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="controlIntervention">Control/Standard Care</Label>
+                  <Textarea
+                    id="controlIntervention"
+                    value={getFieldValue("controlIntervention")}
+                    onChange={(e) => handleFieldChange("controlIntervention", e.target.value)}
+                    onFocus={() => onFieldFocus("controlIntervention")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "controlIntervention" ? "ring-2 ring-primary" : ""}
+                    rows={3}
+                    placeholder="Describe control group treatment"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Step 6: Outcomes & Functional Scales */}
+            {currentStep === 6 && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="primaryOutcome">Primary Outcome</Label>
+                  <Textarea
+                    id="primaryOutcome"
+                    value={getFieldValue("primaryOutcome")}
+                    onChange={(e) => handleFieldChange("primaryOutcome", e.target.value)}
+                    onFocus={() => onFieldFocus("primaryOutcome")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "primaryOutcome" ? "ring-2 ring-primary" : ""}
+                    rows={2}
+                    placeholder="Main outcome measure"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="secondaryOutcomes">Secondary Outcomes</Label>
+                  <Textarea
+                    id="secondaryOutcomes"
+                    value={getFieldValue("secondaryOutcomes")}
+                    onChange={(e) => handleFieldChange("secondaryOutcomes", e.target.value)}
+                    onFocus={() => onFieldFocus("secondaryOutcomes")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "secondaryOutcomes" ? "ring-2 ring-primary" : ""}
+                    rows={3}
+                    placeholder="Additional outcome measures"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="followUpDuration">Follow-up Duration</Label>
+                    <Input
+                      id="followUpDuration"
+                      value={getFieldValue("followUpDuration")}
+                      onChange={(e) => handleFieldChange("followUpDuration", e.target.value)}
+                      onFocus={() => onFieldFocus("followUpDuration")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "followUpDuration" ? "ring-2 ring-primary" : ""}
+                      placeholder="e.g., 90 days, 1 year"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="mortality">Mortality Rate</Label>
+                    <Input
+                      id="mortality"
+                      value={getFieldValue("mortality")}
+                      onChange={(e) => handleFieldChange("mortality", e.target.value)}
+                      onFocus={() => onFieldFocus("mortality")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={activeField === "mortality" ? "ring-2 ring-primary" : ""}
+                      placeholder="Percentage or rate"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Modified Rankin Scale (mRS) Distribution</Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Enter percentage or number of patients for each mRS score (0-6)
+                  </p>
+                  <div className="grid grid-cols-7 gap-2">
+                    {[0, 1, 2, 3, 4, 5, 6].map((score) => (
+                      <div key={score} className="space-y-1">
+                        <Label htmlFor={`mRS${score}`} className="text-xs">
+                          mRS {score}
+                        </Label>
+                        <Input
+                          id={`mRS${score}`}
+                          value={getFieldValue(`mRS${score}`)}
+                          onChange={(e) => handleFieldChange(`mRS${score}`, e.target.value)}
+                          onFocus={() => onFieldFocus(`mRS${score}`)}
+                          onBlur={() => onFieldFocus(null)}
+                          className={`text-center ${activeField === `mRS${score}` ? "ring-2 ring-primary" : ""}`}
+                          placeholder="%"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="otherScales">Other Scales (GCS, NIHSS, BI, GOS)</Label>
+                  <Textarea
+                    id="otherScales"
+                    value={getFieldValue("otherScales")}
+                    onChange={(e) => handleFieldChange("otherScales", e.target.value)}
+                    onFocus={() => onFieldFocus("otherScales")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "otherScales" ? "ring-2 ring-primary" : ""}
+                    rows={3}
+                    placeholder="Glasgow Coma Scale, NIH Stroke Scale, Barthel Index, Glasgow Outcome Scale"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Step 7: Adverse Events & Predictors */}
+            {currentStep === 7 && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="complications">Complications</Label>
+                  <Textarea
+                    id="complications"
+                    value={getFieldValue("complications")}
+                    onChange={(e) => handleFieldChange("complications", e.target.value)}
+                    onFocus={() => onFieldFocus("complications")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "complications" ? "ring-2 ring-primary" : ""}
+                    rows={4}
+                    placeholder="Rebleeding, infection, seizures, DVT, PE, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="adverseEventsRate">Adverse Events Rate</Label>
+                  <Input
+                    id="adverseEventsRate"
+                    value={getFieldValue("adverseEventsRate")}
+                    onChange={(e) => handleFieldChange("adverseEventsRate", e.target.value)}
+                    onFocus={() => onFieldFocus("adverseEventsRate")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "adverseEventsRate" ? "ring-2 ring-primary" : ""}
+                    placeholder="Overall rate or specific rates"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="predictors">Predictors of Poor Outcome</Label>
+                  <Textarea
+                    id="predictors"
+                    value={getFieldValue("predictors")}
+                    onChange={(e) => handleFieldChange("predictors", e.target.value)}
+                    onFocus={() => onFieldFocus("predictors")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "predictors" ? "ring-2 ring-primary" : ""}
+                    rows={4}
+                    placeholder="Age, hematoma volume, IVH, GCS, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="statisticalSignificance">Statistical Significance</Label>
+                  <Textarea
+                    id="statisticalSignificance"
+                    value={getFieldValue("statisticalSignificance")}
+                    onChange={(e) => handleFieldChange("statisticalSignificance", e.target.value)}
+                    onFocus={() => onFieldFocus("statisticalSignificance")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "statisticalSignificance" ? "ring-2 ring-primary" : ""}
+                    rows={3}
+                    placeholder="p-values, odds ratios, confidence intervals"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Step 8: Quality & Notes */}
+            {currentStep === 8 && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="strengths">Study Strengths</Label>
+                  <Textarea
+                    id="strengths"
+                    value={getFieldValue("strengths")}
+                    onChange={(e) => handleFieldChange("strengths", e.target.value)}
+                    onFocus={() => onFieldFocus("strengths")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "strengths" ? "ring-2 ring-primary" : ""}
+                    rows={3}
+                    placeholder="Methodological strengths, large sample size, randomization, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="limitations">Study Limitations</Label>
+                  <Textarea
+                    id="limitations"
+                    value={getFieldValue("limitations")}
+                    onChange={(e) => handleFieldChange("limitations", e.target.value)}
+                    onFocus={() => onFieldFocus("limitations")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "limitations" ? "ring-2 ring-primary" : ""}
+                    rows={3}
+                    placeholder="Selection bias, small sample, lack of blinding, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="biasAssessment">Risk of Bias Assessment</Label>
+                  <Textarea
+                    id="biasAssessment"
+                    value={getFieldValue("biasAssessment")}
+                    onChange={(e) => handleFieldChange("biasAssessment", e.target.value)}
+                    onFocus={() => onFieldFocus("biasAssessment")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "biasAssessment" ? "ring-2 ring-primary" : ""}
+                    rows={3}
+                    placeholder="Cochrane Risk of Bias tool, Newcastle-Ottawa Scale, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="qualityScore">Quality Score</Label>
+                  <Input
+                    id="qualityScore"
+                    value={getFieldValue("qualityScore")}
+                    onChange={(e) => handleFieldChange("qualityScore", e.target.value)}
+                    onFocus={() => onFieldFocus("qualityScore")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "qualityScore" ? "ring-2 ring-primary" : ""}
+                    placeholder="JADAD score, GRADE, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reviewerNotes">Reviewer Notes</Label>
+                  <Textarea
+                    id="reviewerNotes"
+                    value={getFieldValue("reviewerNotes")}
+                    onChange={(e) => handleFieldChange("reviewerNotes", e.target.value)}
+                    onFocus={() => onFieldFocus("reviewerNotes")}
+                    onBlur={() => onFieldFocus(null)}
+                    className={activeField === "reviewerNotes" ? "ring-2 ring-primary" : ""}
+                    rows={4}
+                    placeholder="Additional notes, observations, or concerns"
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>

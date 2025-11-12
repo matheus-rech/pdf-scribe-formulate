@@ -16,9 +16,12 @@ export interface ExtractionEntry {
   text: string;
   page: number;
   coordinates?: { x: number; y: number; width: number; height: number };
-  method: "manual" | "ai" | "image" | "region";
+  method: "manual" | "ai" | "image" | "region" | "annotation";
   timestamp: Date;
   imageData?: string;
+  validation_status?: "validated" | "questionable" | "pending";
+  confidence_score?: number;
+  region?: { x: number; y: number; width: number; height: number };
 }
 
 const Index = () => {
