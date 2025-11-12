@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Upload, ChevronLeft, ChevronRight, Box, Camera, FileText, Search as SearchIcon } from "lucide-react";
+import { Upload, ChevronLeft, ChevronRight, Box, Camera, FileText, Search as SearchIcon, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import * as pdfjsLib from "pdfjs-dist";
 import type { ExtractionEntry } from "@/pages/Index";
 import { SearchPanel } from "./SearchPanel";
+import { extractAnnotationsFromPDF, type PDFAnnotation } from "@/lib/annotationParser";
+import { AnnotationImportDialog } from "./AnnotationImportDialog";
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -23,6 +25,7 @@ interface PDFViewerProps {
   scale: number;
   onScaleChange: (scale: number) => void;
   extractions: ExtractionEntry[];
+  onAnnotationsImport?: (annotations: PDFAnnotation[]) => void;
 }
 
 export const PDFViewer = ({
@@ -36,7 +39,8 @@ export const PDFViewer = ({
   onExtraction,
   scale,
   onScaleChange,
-  extractions
+  extractions,
+  onAnnotationsImport
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,6 +55,9 @@ export const PDFViewer = ({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<Array<{ page: number; text: string; index: number }>>([]);
   const [pdfText, setPdfText] = useState("");
+  const [annotationDialogOpen, setAnnotationDialogOpen] = useState(false);
+  const [importResult, setImportResult] = useState<any>(null);
+  const [isLoadingAnnotations, setIsLoadingAnnotations] = useState(false);
 
   // Load PDF when file changes
   useEffect(() => {
@@ -274,6 +281,37 @@ export const PDFViewer = ({
     }
   };
 
+  const handleImportAnnotations = async () => {
+    if (!file) {
+      toast.error("Please load a PDF first");
+      return;
+    }
+
+    setIsLoadingAnnotations(true);
+    try {
+      const result = await extractAnnotationsFromPDF(file);
+      
+      if (result.annotations.length === 0) {
+        toast.info("No annotations found in this PDF");
+        return;
+      }
+
+      setImportResult(result);
+      setAnnotationDialogOpen(true);
+    } catch (error) {
+      console.error("Error importing annotations:", error);
+      toast.error("Failed to import annotations from PDF");
+    } finally {
+      setIsLoadingAnnotations(false);
+    }
+  };
+
+  const handleAnnotationsSelected = (selectedAnnotations: PDFAnnotation[]) => {
+    if (onAnnotationsImport) {
+      onAnnotationsImport(selectedAnnotations);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
@@ -379,6 +417,16 @@ export const PDFViewer = ({
             <SearchIcon className="h-4 w-4" />
             Search
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleImportAnnotations}
+            disabled={!file || isLoadingAnnotations}
+            className="gap-2 bg-gradient-to-r from-primary/10 to-accent/10 hover:from-primary/20 hover:to-accent/20"
+          >
+            <FileDown className="h-4 w-4" />
+            {isLoadingAnnotations ? "Reading..." : "Import Annotations"}
+          </Button>
         </div>
 
         {activeField && (
@@ -417,6 +465,13 @@ export const PDFViewer = ({
           onSearchResult={setSearchResults}
           isOpen={searchOpen}
           onClose={() => setSearchOpen(false)}
+        />
+        
+        <AnnotationImportDialog
+          open={annotationDialogOpen}
+          onOpenChange={setAnnotationDialogOpen}
+          importResult={importResult}
+          onImport={handleAnnotationsSelected}
         />
         
         {!file ? (

@@ -146,6 +146,8 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll, onUpdate
         return "border-extraction-image";
       case "region":
         return "border-accent";
+      case "annotation-import":
+        return "border-chart-2";
       default:
         return "border-muted";
     }
@@ -161,6 +163,8 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll, onUpdate
         return <span className="text-xs px-2 py-0.5 rounded bg-extraction-image/10 text-extraction-image border border-extraction-image/20">Image</span>;
       case "region":
         return <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20">Region</span>;
+      case "annotation-import":
+        return <span className="text-xs px-2 py-0.5 rounded bg-chart-2/10 text-chart-2 border border-chart-2/20">📎 Annotation</span>;
       default:
         return null;
     }

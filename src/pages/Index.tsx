@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { PDFViewer } from "@/components/PDFViewer";
 import { ExtractionForm } from "@/components/ExtractionForm";
+import { PDFViewer } from "@/components/PDFViewer";
 import { TraceLog } from "@/components/TraceLog";
+import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
+import { toast } from "sonner";
 import { FileText } from "lucide-react";
 
 export interface ExtractionEntry {
@@ -37,7 +39,45 @@ const Index = () => {
 
   const handleJumpToExtraction = (entry: ExtractionEntry) => {
     setCurrentPage(entry.page);
-    // Scroll to coordinates if available
+  };
+
+  const handleAnnotationsImport = (annotations: PDFAnnotation[]) => {
+    const FIELD_NAMES = [
+      "citation", "doi", "pmid", "journal", "year",
+      "population", "intervention", "comparator", "outcomes", "timing",
+      "sampleSize", "age", "gender", "comorbidities",
+      "volumeMeasurements", "swellingIndices",
+      "surgicalProcedures", "medicalManagement",
+      "controlGroup", "treatmentGroup",
+      "mortality", "mrsDistribution",
+      "adverseEvents", "predictors"
+    ];
+
+    const matches = matchAnnotationsToFields(annotations, FIELD_NAMES);
+    let importCount = 0;
+
+    // Create extraction entries from matched annotations
+    Object.entries(matches).forEach(([fieldName, fieldAnnotations]) => {
+      fieldAnnotations.forEach((annotation) => {
+        const extractionText = annotation.selectedText || annotation.content;
+        if (extractionText && extractionText.trim()) {
+          handleExtraction({
+            id: `import-${annotation.id}`,
+            fieldName,
+            text: extractionText,
+            page: annotation.page,
+            coordinates: annotation.coordinates,
+            method: "annotation-import" as any,
+            timestamp: annotation.timestamp || new Date(),
+          });
+          importCount++;
+        }
+      });
+    });
+
+    if (importCount > 0) {
+      toast.success(`Successfully imported ${importCount} annotation(s) to form fields`);
+    }
   };
 
   return (
@@ -66,19 +106,20 @@ const Index = () => {
 
       {/* Center Panel - PDF Viewer */}
       <div className="flex-1 flex flex-col bg-muted/30">
-        <PDFViewer
-          file={pdfFile}
-          onFileChange={setPdfFile}
-          currentPage={currentPage}
-          onPageChange={setCurrentPage}
-          totalPages={totalPages}
-          onTotalPagesChange={setTotalPages}
-          activeField={activeField}
-          onExtraction={handleExtraction}
-          scale={scale}
-          onScaleChange={setScale}
-          extractions={extractions}
-        />
+          <PDFViewer
+            file={pdfFile}
+            onFileChange={setPdfFile}
+            currentPage={currentPage}
+            onPageChange={setCurrentPage}
+            totalPages={totalPages}
+            onTotalPagesChange={setTotalPages}
+            activeField={activeField}
+            onExtraction={handleExtraction}
+            scale={scale}
+            onScaleChange={setScale}
+            extractions={extractions}
+            onAnnotationsImport={handleAnnotationsImport}
+          />
       </div>
 
       {/* Right Panel - Trace Log */}
