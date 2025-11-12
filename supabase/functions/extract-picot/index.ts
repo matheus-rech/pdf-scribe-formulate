@@ -51,16 +51,34 @@ serve(async (req) => {
     let targetText = pdfText;
     
     if (studyId) {
+      // Use authenticated client to respect RLS policies
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
       );
       
-      const { data: study } = await supabase
+      const { data: study, error: studyError } = await supabase
         .from("studies")
         .select("pdf_chunks")
         .eq("id", studyId)
         .single();
+      
+      if (studyError) {
+        console.error("Study access denied or not found:", studyError);
+        return new Response(
+          JSON.stringify({ error: 'Study not found or access denied' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       
       if (study?.pdf_chunks?.sections) {
         const relevantSections = ["abstract", "introduction", "methods", "results"];

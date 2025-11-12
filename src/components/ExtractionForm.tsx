@@ -769,18 +769,23 @@ export const ExtractionForm = ({
       // Generate a unique extraction_id for this autosave
       const extractionId = `autosave-${studyId}`;
       
+      // Get current user ID for insertion
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error("No authenticated user for autosave");
+        return;
+      }
+      
       // Save form progress to database
       const { error } = await supabase
         .from('extractions')
-        .upsert({
+        .insert({
           extraction_id: extractionId,
           study_id: studyId,
+          user_id: user.id,
           field_name: 'form_progress',
           text: currentDataStr,
-          method: 'autosave',
-          timestamp: new Date().toISOString()
-        }, {
-          onConflict: 'extraction_id'
+          method: 'autosave'
         });
 
       if (error) throw error;

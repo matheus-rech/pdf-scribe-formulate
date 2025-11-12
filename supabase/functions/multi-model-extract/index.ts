@@ -48,11 +48,25 @@ serve(async (req) => {
 
     console.log(`Multi-model extraction started for step ${stepNumber} with extraction ID: ${validExtractionId}`);
 
+    // Use authenticated client to respect RLS policies
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Create authenticated client that respects RLS
+    const supabase = createClient(
+      supabaseUrl, 
+      supabaseAnonKey,
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
     // Get active reviewer configurations
     const { data: reviewers, error: reviewerError } = await supabase
@@ -62,17 +76,26 @@ serve(async (req) => {
       .order('priority', { ascending: true });
 
     if (reviewerError || !reviewers || reviewers.length === 0) {
+      console.error('Reviewer config error:', reviewerError);
       throw new Error('No active reviewers configured');
     }
 
     console.log(`Found ${reviewers.length} active reviewers`);
 
-    // Get study chunks for section-aware extraction
-    const { data: study } = await supabase
+    // Get study chunks for section-aware extraction - RLS will enforce ownership
+    const { data: study, error: studyError } = await supabase
       .from('studies')
       .select('pdf_chunks')
       .eq('id', studyId)
       .single();
+    
+    if (studyError) {
+      console.error('Study access denied:', studyError);
+      return new Response(
+        JSON.stringify({ error: 'Study not found or access denied' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Get extraction schema based on step
     const schema = getExtractionSchema(stepNumber);
