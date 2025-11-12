@@ -1,9 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema
+const AITableVisionSchema = z.object({
+  imageData: z.string().min(1).max(10000000), // ~10MB base64 image
+  analysisType: z.enum(["table", "validation"]).optional().default("table")
+});
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -11,11 +18,21 @@ serve(async (req) => {
   }
 
   try {
-    const { imageData, analysisType = "table" } = await req.json();
-
-    if (!imageData) {
-      throw new Error("No image data provided");
+    const body = await req.json();
+    
+    // Validate input
+    const validation = AITableVisionSchema.safeParse(body);
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Invalid input", 
+          details: validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+
+    const { imageData, analysisType } = validation.data;
 
     console.log(`Starting AI vision analysis for type: ${analysisType}`);
 

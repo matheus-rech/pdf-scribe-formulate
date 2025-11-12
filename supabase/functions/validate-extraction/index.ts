@@ -1,9 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schema
+const ValidateExtractionSchema = z.object({
+  fieldName: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/),
+  fieldValue: z.string().max(10000),
+  pdfText: z.string().min(1).max(1000000)
+});
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,7 +19,24 @@ serve(async (req) => {
   }
 
   try {
-    const { fieldName, fieldValue, pdfText } = await req.json();
+    const body = await req.json();
+    
+    // Validate input
+    const validation = ValidateExtractionSchema.safeParse(body);
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid input', 
+          details: validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    const { fieldName, fieldValue, pdfText } = validation.data;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
