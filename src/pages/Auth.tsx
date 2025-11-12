@@ -1,12 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Mail } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -27,6 +34,51 @@ const Auth = () => {
   }, [navigate]);
 
 
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email.trim()) {
+      toast({
+        title: "Email required",
+        description: "Please enter your email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        setEmailSent(true);
+        toast({
+          title: "Check your email",
+          description: "We sent you a magic link to sign in",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -37,12 +89,51 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              GitHub OAuth is not available in Lovable Cloud. Please enable Google OAuth in Cloud → Users → Auth Settings, or use email/phone authentication.
-            </AlertDescription>
-          </Alert>
+          {emailSent ? (
+            <div className="text-center space-y-4">
+              <div className="p-4 rounded-full bg-primary/10 w-16 h-16 mx-auto flex items-center justify-center">
+                <Mail className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">Check your email</h3>
+                <p className="text-sm text-muted-foreground">
+                  We sent a magic link to <strong>{email}</strong>
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Click the link in the email to sign in
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEmailSent(false);
+                  setEmail("");
+                }}
+                className="w-full"
+              >
+                Use a different email
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleMagicLink} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
+                  autoFocus
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                <Mail className="mr-2 h-4 w-4" />
+                {loading ? "Sending..." : "Send magic link"}
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>
