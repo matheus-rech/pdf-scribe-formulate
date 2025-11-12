@@ -2,3 +2,6 @@ project_id = "xbeitkcacabbrqcosyst"
 
 [functions.ai-table-vision]
 verify_jwt = false
+
+[functions.extract-picot]
+verify_jwt = false
