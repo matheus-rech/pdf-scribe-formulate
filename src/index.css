@@ -221,4 +221,39 @@ All colors MUST be HSL.
     max-width: 100%;
     margin: 0 auto;
   }
+
+  /* Annotation canvas cursors */
+  canvas[data-tool="pen"] {
+    cursor: crosshair !important;
+  }
+
+  canvas[data-tool="line"],
+  canvas[data-tool="arrow"],
+  canvas[data-tool="polygon"] {
+    cursor: crosshair !important;
+  }
+
+  canvas[data-tool="text"] {
+    cursor: text !important;
+  }
+
+  canvas[data-tool="eraser"] {
+    cursor: not-allowed !important;
+  }
+
+  canvas[data-tool="select"] {
+    cursor: default !important;
+  }
+
+  /* Smooth animations for annotations */
+  .canvas-overlay {
+    transition: opacity 0.2s ease;
+  }
+
+  /* Keyboard hint styling */
+  kbd {
+    font-family: ui-monospace, monospace;
+    font-weight: 600;
+  }
 }
+

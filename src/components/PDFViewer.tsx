@@ -78,7 +78,8 @@ export const PDFViewer = ({
     savePageAnnotation, 
     getPageAnnotation, 
     clearPageAnnotation, 
-    hasAnnotation 
+    hasAnnotation,
+    getAllAnnotations,
   } = usePageAnnotations();
 
   const {
@@ -95,6 +96,8 @@ export const PDFViewer = ({
     bringToFront,
     sendToBack,
     clearCanvas,
+    finishPolygon,
+    polygonPointCount,
   } = useAnnotationCanvas(drawingCanvasRef, pageDimensions.width, pageDimensions.height, drawingMode);
 
   const {
@@ -113,12 +116,30 @@ export const PDFViewer = ({
     onUndo: undo,
     onRedo: redo,
     onEscape: () => {
-      setDrawingMode(false);
-      setRegionMode(false);
-      setImageMode(false);
-      setTextSelectionMode(false);
+      if (activeTool === 'polygon' && polygonPointCount > 0) {
+        finishPolygon();
+      } else {
+        setDrawingMode(false);
+        setRegionMode(false);
+        setImageMode(false);
+        setTextSelectionMode(false);
+      }
     },
   }, drawingMode);
+
+  // Handle Enter key for polygon completion
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && activeTool === 'polygon' && polygonPointCount >= 3) {
+        finishPolygon();
+      }
+    };
+
+    if (drawingMode) {
+      window.addEventListener('keypress', handleKeyPress);
+      return () => window.removeEventListener('keypress', handleKeyPress);
+    }
+  }, [drawingMode, activeTool, polygonPointCount, finishPolygon]);
 
   // Save annotations when switching pages
   const saveCurrentPageAnnotations = useCallback(() => {
@@ -169,6 +190,30 @@ export const PDFViewer = ({
       fabricCanvas.off('object:removed', handleObjectEvent);
     };
   }, [fabricCanvas, saveState, drawingMode, currentPage, savePageAnnotation]);
+
+  // Get PDF page dimensions and update canvas size
+  useEffect(() => {
+    if (!file || !drawingMode) return;
+
+    const getPDFDimensions = async () => {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(currentPage);
+        const viewport = page.getViewport({ scale });
+        
+        setPageDimensions({
+          width: viewport.width,
+          height: viewport.height,
+        });
+      } catch (error) {
+        console.error("Error getting PDF dimensions:", error);
+      }
+    };
+
+    getPDFDimensions();
+  }, [file, currentPage, scale, drawingMode]);
 
   // Extract text from PDF when file loads
   useEffect(() => {
@@ -559,6 +604,11 @@ export const PDFViewer = ({
               disabled={!file}
             />
             <span className="text-muted-foreground">/ {totalPages}</span>
+            {hasAnnotation(currentPage) && (
+              <span className="ml-1 px-1.5 py-0.5 bg-primary text-primary-foreground text-xs rounded" title="This page has annotations">
+                ✓
+              </span>
+            )}
           </div>
           <Button
             variant="outline"
@@ -719,7 +769,7 @@ export const PDFViewer = ({
 
         {/* Drawing Toolbar */}
         {drawingMode && (
-          <div className="mb-4">
+          <div className="mb-4 space-y-2">
             <DrawingToolbar
               activeTool={activeTool}
               onToolChange={handleDrawingToolChange}
@@ -742,6 +792,29 @@ export const PDFViewer = ({
               onSendToBack={sendToBack}
               onDeleteSelected={deleteSelected}
             />
+            
+            {/* Polygon helper text */}
+            {activeTool === 'polygon' && (
+              <div className="flex items-center gap-2 p-2 bg-primary/10 border border-primary/20 rounded-lg text-sm">
+                <span className="text-primary font-medium">
+                  Polygon Mode: Click to add points ({polygonPointCount} points)
+                </span>
+                {polygonPointCount >= 3 && (
+                  <span className="text-muted-foreground">
+                    • Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Esc</kbd> to finish
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Interactive drawing hints */}
+            {(activeTool === 'line' || activeTool === 'arrow') && (
+              <div className="flex items-center gap-2 p-2 bg-accent/10 border border-accent/20 rounded-lg text-sm">
+                <span className="text-accent-foreground">
+                  {activeTool === 'line' ? 'Line' : 'Arrow'} Mode: Click and drag to draw
+                </span>
+              </div>
+            )}
           </div>
         )}
         
@@ -779,14 +852,19 @@ export const PDFViewer = ({
 
             {/* Drawing Canvas Overlay */}
             {drawingMode && (
-              <div className="absolute top-0 left-0 w-full h-full pointer-events-auto z-10">
+              <div className="absolute top-0 left-0 pointer-events-auto z-10 canvas-overlay" style={{ width: '100%', height: '100%' }}>
                 <canvas
                   ref={drawingCanvasRef}
-                  className="absolute top-0 left-0"
+                  data-tool={activeTool}
                   style={{ 
+                    position: 'absolute',
+                    top: 0,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
                     border: '2px dashed hsl(var(--primary))',
                     borderRadius: '0.5rem',
-                    backgroundColor: 'transparent',
+                    backgroundColor: 'rgba(255, 255, 255, 0.01)',
+                    maxWidth: '100%',
                   }}
                 />
               </div>

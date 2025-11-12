@@ -85,7 +85,7 @@ export const DrawingToolbar = ({
           variant={activeTool === "line" ? "default" : "outline"}
           size="sm"
           onClick={() => onToolChange("line")}
-          title="Line (L)"
+          title="Line - Click and drag to draw a straight line"
         >
           <Minus className="h-4 w-4" />
         </Button>
@@ -93,7 +93,7 @@ export const DrawingToolbar = ({
           variant={activeTool === "arrow" ? "default" : "outline"}
           size="sm"
           onClick={() => onToolChange("arrow")}
-          title="Arrow (A)"
+          title="Arrow - Click and drag to draw an arrow"
         >
           <ArrowRight className="h-4 w-4" />
         </Button>
@@ -117,7 +117,7 @@ export const DrawingToolbar = ({
           variant={activeTool === "polygon" ? "default" : "outline"}
           size="sm"
           onClick={() => onToolChange("polygon")}
-          title="Polygon"
+          title="Polygon - Click to add points, press Enter or Esc to finish"
         >
           <Pentagon className="h-4 w-4" />
         </Button>
