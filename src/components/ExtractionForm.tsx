@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2, Check, AlertCircle, Save, Cloud, CloudOff, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2, Check, AlertCircle, Save, Cloud, CloudOff, Download, AlertTriangle } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { Card } from "./ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +15,8 @@ import { ValidationSummary } from "./ValidationSummary";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { ExtractButton } from "./ExtractButton";
 import { ExtractionPreview } from "./ExtractionPreview";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { ConflictResolutionDashboard } from "./ConflictResolutionDashboard";
 
 interface ExtractionFormProps {
   activeField: string | null;
@@ -99,6 +101,7 @@ export const ExtractionForm = ({
   // AI Extraction state
   const [isExtractingStep, setIsExtractingStep] = useState<Record<number, boolean>>({});
   const [isExtractingAll, setIsExtractingAll] = useState(false);
+  const [isExtractingMultiModel, setIsExtractingMultiModel] = useState(false);
   const [confidenceScores, setConfidenceScores] = useState<Record<string, {
     confidence: number;
     sourceSection: string;
@@ -110,6 +113,8 @@ export const ExtractionForm = ({
     stepNumber: number;
     stepTitle: string;
   } | null>(null);
+  const [showConflictDashboard, setShowConflictDashboard] = useState(false);
+  const [multiModelResults, setMultiModelResults] = useState<any>(null);
   
   // Validation state
   const [validationResults, setValidationResults] = useState<Record<string, {
@@ -472,6 +477,75 @@ export const ExtractionForm = ({
       }
     } finally {
       setIsExtractingStep(prev => ({ ...prev, [stepNumber]: false }));
+    }
+  };
+
+  const handleMultiModelExtract = async (stepNumber: number) => {
+    if (!pdfText || !studyId) {
+      toast.error("Please load a PDF first");
+      return;
+    }
+
+    setIsExtractingMultiModel(true);
+
+    // Create a temporary extraction entry to store reviews
+    const extractionId = `multi-${stepNumber}-${Date.now()}`;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("multi-model-extract", {
+        body: { 
+          stepNumber, 
+          pdfText, 
+          studyId,
+          extractionId
+        }
+      });
+
+      if (error) throw error;
+
+      setMultiModelResults(data);
+
+      const { consensus, summary, conflicts } = data;
+
+      // Apply consensus values to form
+      const extractedData: Record<string, string> = {};
+      Object.entries(consensus).forEach(([fieldName, consensusData]: [string, any]) => {
+        if (consensusData.value !== null) {
+          extractedData[fieldName] = JSON.stringify(consensusData.value);
+        }
+      });
+
+      setFormData(prev => ({ ...prev, ...extractedData }));
+
+      // Create extraction entries for fields
+      Object.entries(extractedData).forEach(([field, value]) => {
+        onExtraction({
+          id: `multi-ai-${field}-${Date.now()}`,
+          fieldName: field,
+          text: value,
+          page: 1,
+          method: "ai",
+          timestamp: new Date(),
+          confidence_score: Math.round(summary.averageConfidence)
+        });
+      });
+
+      if (conflicts.length > 0) {
+        toast.warning(`Extraction complete with ${conflicts.length} conflict(s). Review recommended.`, {
+          action: {
+            label: "Review Conflicts",
+            onClick: () => setShowConflictDashboard(true)
+          }
+        });
+      } else {
+        toast.success(`Multi-model extraction complete! Average confidence: ${Math.round(summary.averageConfidence)}%`);
+      }
+
+    } catch (error: any) {
+      console.error("Multi-model extraction error:", error);
+      toast.error("Multi-model extraction failed: " + (error.message || "Unknown error"));
+    } finally {
+      setIsExtractingMultiModel(false);
     }
   };
 
@@ -971,23 +1045,45 @@ export const ExtractionForm = ({
             </div>
             <div className="flex items-center gap-2">
               {currentStep !== 2 && ( // Step 2 (PICO-T) has its own extraction button
-                <ExtractButton
-                  onClick={() => handleExtractStep(currentStep)}
-                  isLoading={isExtractingStep[currentStep] || false}
-                  disabled={!pdfLoaded || isExtractingAll}
-                  size="sm"
-                />
+                <>
+                  <ExtractButton
+                    onClick={() => handleExtractStep(currentStep)}
+                    isLoading={isExtractingStep[currentStep] || false}
+                    disabled={!pdfLoaded || isExtractingAll || isExtractingMultiModel}
+                    size="sm"
+                  />
+                  <ExtractButton
+                    onClick={() => handleMultiModelExtract(currentStep)}
+                    isLoading={isExtractingMultiModel}
+                    disabled={!pdfLoaded || isExtractingAll || isExtractingStep[currentStep]}
+                    variant="default"
+                    size="sm"
+                  >
+                    Multi-AI Review
+                  </ExtractButton>
+                </>
               )}
               {currentStep === 1 && (
-                <ExtractButton
-                  onClick={handleExtractAll}
-                  isLoading={isExtractingAll}
-                  disabled={!pdfLoaded}
-                  variant="default"
-                  size="sm"
-                >
-                  Extract All Steps
-                </ExtractButton>
+                <>
+                  <ExtractButton
+                    onClick={handleExtractAll}
+                    isLoading={isExtractingAll}
+                    disabled={!pdfLoaded || isExtractingMultiModel}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Extract All Steps
+                  </ExtractButton>
+                  <Button
+                    onClick={() => setShowConflictDashboard(true)}
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    Review Conflicts
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -2043,6 +2139,16 @@ export const ExtractionForm = ({
           stepTitle={previewData.stepTitle}
         />
       )}
+
+      {/* Conflict Resolution Dashboard Dialog */}
+      <Dialog open={showConflictDashboard} onOpenChange={setShowConflictDashboard}>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>AI Review Conflict Resolution</DialogTitle>
+          </DialogHeader>
+          <ConflictResolutionDashboard />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -14,6 +14,140 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_reviews: {
+        Row: {
+          confidence_score: number
+          created_at: string
+          extracted_value: string | null
+          extraction_id: string
+          field_name: string
+          id: string
+          processing_time_ms: number | null
+          reasoning: string | null
+          reviewer_config_id: string
+          source_page: number | null
+          source_section: string | null
+          source_text: string | null
+        }
+        Insert: {
+          confidence_score: number
+          created_at?: string
+          extracted_value?: string | null
+          extraction_id: string
+          field_name: string
+          id?: string
+          processing_time_ms?: number | null
+          reasoning?: string | null
+          reviewer_config_id: string
+          source_page?: number | null
+          source_section?: string | null
+          source_text?: string | null
+        }
+        Update: {
+          confidence_score?: number
+          created_at?: string
+          extracted_value?: string | null
+          extraction_id?: string
+          field_name?: string
+          id?: string
+          processing_time_ms?: number | null
+          reasoning?: string | null
+          reviewer_config_id?: string
+          source_page?: number | null
+          source_section?: string | null
+          source_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_reviews_extraction_id_fkey"
+            columns: ["extraction_id"]
+            isOneToOne: false
+            referencedRelation: "extractions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_reviews_reviewer_config_id_fkey"
+            columns: ["reviewer_config_id"]
+            isOneToOne: false
+            referencedRelation: "reviewer_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      extraction_consensus: {
+        Row: {
+          agreeing_reviewers: number
+          agreement_level: number
+          conflict_detected: boolean
+          conflict_types: Database["public"]["Enums"]["conflict_type"][] | null
+          consensus_value: string | null
+          created_at: string
+          extraction_id: string
+          field_name: string
+          human_resolution_notes: string | null
+          human_resolved_at: string | null
+          human_resolved_by: string | null
+          human_resolved_value: string | null
+          human_review_status:
+            | Database["public"]["Enums"]["review_status"]
+            | null
+          id: string
+          requires_human_review: boolean
+          total_reviewers: number
+          updated_at: string
+        }
+        Insert: {
+          agreeing_reviewers: number
+          agreement_level: number
+          conflict_detected?: boolean
+          conflict_types?: Database["public"]["Enums"]["conflict_type"][] | null
+          consensus_value?: string | null
+          created_at?: string
+          extraction_id: string
+          field_name: string
+          human_resolution_notes?: string | null
+          human_resolved_at?: string | null
+          human_resolved_by?: string | null
+          human_resolved_value?: string | null
+          human_review_status?:
+            | Database["public"]["Enums"]["review_status"]
+            | null
+          id?: string
+          requires_human_review?: boolean
+          total_reviewers: number
+          updated_at?: string
+        }
+        Update: {
+          agreeing_reviewers?: number
+          agreement_level?: number
+          conflict_detected?: boolean
+          conflict_types?: Database["public"]["Enums"]["conflict_type"][] | null
+          consensus_value?: string | null
+          created_at?: string
+          extraction_id?: string
+          field_name?: string
+          human_resolution_notes?: string | null
+          human_resolved_at?: string | null
+          human_resolved_by?: string | null
+          human_resolved_value?: string | null
+          human_review_status?:
+            | Database["public"]["Enums"]["review_status"]
+            | null
+          id?: string
+          requires_human_review?: boolean
+          total_reviewers?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extraction_consensus_extraction_id_fkey"
+            columns: ["extraction_id"]
+            isOneToOne: false
+            referencedRelation: "extractions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       extractions: {
         Row: {
           confidence_score: number | null
@@ -76,6 +210,45 @@ export type Database = {
           },
         ]
       }
+      reviewer_configs: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          model: Database["public"]["Enums"]["ai_provider"]
+          name: string
+          priority: number
+          prompt_strategy: Database["public"]["Enums"]["review_strategy"]
+          system_prompt: string
+          temperature: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          model: Database["public"]["Enums"]["ai_provider"]
+          name: string
+          priority?: number
+          prompt_strategy: Database["public"]["Enums"]["review_strategy"]
+          system_prompt: string
+          temperature?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          model?: Database["public"]["Enums"]["ai_provider"]
+          name?: string
+          priority?: number
+          prompt_strategy?: Database["public"]["Enums"]["review_strategy"]
+          system_prompt?: string
+          temperature?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       studies: {
         Row: {
           created_at: string
@@ -120,7 +293,20 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      ai_provider:
+        | "google/gemini-2.5-pro"
+        | "google/gemini-2.5-flash"
+        | "google/gemini-2.5-flash-lite"
+        | "openai/gpt-5"
+        | "openai/gpt-5-mini"
+        | "openai/gpt-5-nano"
+      conflict_type:
+        | "value_disagreement"
+        | "confidence_variance"
+        | "split_vote"
+        | "outlier_detected"
+      review_status: "pending" | "in_progress" | "resolved" | "escalated"
+      review_strategy: "conservative" | "balanced" | "comprehensive" | "fast"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -247,6 +433,23 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      ai_provider: [
+        "google/gemini-2.5-pro",
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-flash-lite",
+        "openai/gpt-5",
+        "openai/gpt-5-mini",
+        "openai/gpt-5-nano",
+      ],
+      conflict_type: [
+        "value_disagreement",
+        "confidence_variance",
+        "split_vote",
+        "outlier_detected",
+      ],
+      review_status: ["pending", "in_progress", "resolved", "escalated"],
+      review_strategy: ["conservative", "balanced", "comprehensive", "fast"],
+    },
   },
 } as const

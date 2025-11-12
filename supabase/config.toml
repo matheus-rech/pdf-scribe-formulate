@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.validate-citation]
 verify_jwt = false
+
+[functions.multi-model-extract]
+verify_jwt = false
