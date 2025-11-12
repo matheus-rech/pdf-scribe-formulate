@@ -102,14 +102,14 @@ Respond in JSON format:
     const content = data.choices[0].message.content;
     
     // Parse JSON from response
-    let validation;
+    let validationResult;
     try {
       // Extract JSON from markdown code blocks if present
       const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/```\n([\s\S]*?)\n```/);
-      validation = jsonMatch ? JSON.parse(jsonMatch[1]) : JSON.parse(content);
+      validationResult = jsonMatch ? JSON.parse(jsonMatch[1]) : JSON.parse(content);
     } catch (e) {
       console.error("Failed to parse AI response:", content);
-      validation = {
+      validationResult = {
         isValid: false,
         confidence: 0,
         issues: ["Unable to parse validation response"],
@@ -118,7 +118,7 @@ Respond in JSON format:
       };
     }
 
-    return new Response(JSON.stringify(validation), {
+    return new Response(JSON.stringify(validationResult), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

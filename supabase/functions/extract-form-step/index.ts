@@ -1,10 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Input validation schema
+const ExtractFormStepSchema = z.object({
+  stepNumber: z.number().int().min(1).max(8),
+  pdfText: z.string().min(1).max(1000000),
+  studyId: z.string().uuid()
+});
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -12,21 +20,24 @@ serve(async (req) => {
   }
 
   try {
-    const { stepNumber, pdfText, studyId } = await req.json();
+    const body = await req.json();
     
-    if (!pdfText || pdfText.trim().length === 0) {
+    // Validate input
+    const validation = ExtractFormStepSchema.safeParse(body);
+    if (!validation.success) {
       return new Response(
-        JSON.stringify({ error: "No PDF text provided" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ 
+          error: 'Invalid input', 
+          details: validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
       );
     }
 
-    if (!stepNumber || stepNumber < 1 || stepNumber > 8) {
-      return new Response(
-        JSON.stringify({ error: "Invalid step number" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const { stepNumber, pdfText, studyId } = validation.data;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
