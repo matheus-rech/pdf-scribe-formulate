@@ -35,6 +35,7 @@ export interface ExtractionEntry {
 const Index = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string>("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,7 +58,7 @@ const Index = () => {
     getAllStudies,
     loadStudyPdf,
     reprocessStudy,
-  } = useStudyStorage(email);
+  } = useStudyStorage(userId);
 
   const [isReprocessing, setIsReprocessing] = useState(false);
 
@@ -68,6 +69,7 @@ const Index = () => {
         navigate("/auth");
       } else {
         setUser(session.user);
+        setUserId(session.user.id);
         setEmail(session.user.email || session.user.user_metadata?.email || "");
       }
     });
@@ -77,6 +79,7 @@ const Index = () => {
         navigate("/auth");
       } else {
         setUser(session.user);
+        setUserId(session.user.id);
         setEmail(session.user.email || session.user.user_metadata?.email || "");
       }
     });
@@ -86,10 +89,10 @@ const Index = () => {
 
   // Load all studies when user is authenticated
   useEffect(() => {
-    if (user && email) {
+    if (userId) {
       getAllStudies().then(setStudies);
     }
-  }, [user, email]);
+  }, [userId]);
 
   // Load extractions when study is selected
   useEffect(() => {

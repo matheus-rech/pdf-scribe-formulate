@@ -8,6 +8,7 @@ import { detectSections } from "@/lib/sectionDetection";
 
 interface Study {
   id: string;
+  user_id: string;
   email: string;
   name: string;
   pdf_name: string | null;
@@ -18,22 +19,26 @@ interface Study {
   pdf_chunks?: any;
 }
 
-export const useStudyStorage = (email: string | null) => {
+export const useStudyStorage = (userId: string | null) => {
   const [currentStudy, setCurrentStudy] = useState<Study | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // Upload PDF to storage and create study record
   const createStudy = async (name: string, pdfFile: File, totalPages: number) => {
-    if (!email) {
-      toast.error("Email required");
+    if (!userId) {
+      toast.error("User ID required - please log in");
       return null;
     }
 
     setIsLoading(true);
     try {
-      // Upload PDF to storage
+      // Get user email for backwards compatibility with storage paths
+      const { data: { user } } = await supabase.auth.getUser();
+      const userEmail = user?.email;
+      
+      // Upload PDF to storage using user_id for path
       const fileExt = pdfFile.name.split('.').pop();
-      const fileName = `${email}/${Date.now()}.${fileExt}`;
+      const fileName = `${userId}/${Date.now()}.${fileExt}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('study-pdfs')
@@ -69,7 +74,8 @@ export const useStudyStorage = (email: string | null) => {
       const { data, error } = await supabase
         .from("studies")
         .insert({
-          email,
+          user_id: userId,
+          email: userEmail,
           name,
           pdf_name: pdfFile.name,
           pdf_url: publicUrl,
@@ -95,9 +101,15 @@ export const useStudyStorage = (email: string | null) => {
 
   // Save extraction
   const saveExtraction = async (studyId: string, extraction: ExtractionEntry) => {
+    if (!userId) {
+      toast.error("User ID required");
+      return;
+    }
+
     try {
       const { error } = await supabase.from("extractions").insert({
         study_id: studyId,
+        user_id: userId,
         extraction_id: extraction.id,
         field_name: extraction.fieldName,
         text: extraction.text,
@@ -148,16 +160,16 @@ export const useStudyStorage = (email: string | null) => {
     }
   };
 
-  // Get all studies for this meta-analysis
+  // Get all studies for this user
   const getAllStudies = async () => {
-    if (!email) return [];
+    if (!userId) return [];
 
     setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from("studies")
         .select("*")
-        .eq("email", email)
+        .eq("user_id", userId)
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
