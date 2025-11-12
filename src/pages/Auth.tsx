@@ -5,20 +5,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mail, Phone } from "lucide-react";
+import { Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [phoneSent, setPhoneSent] = useState(false);
-  const [resendTimer, setResendTimer] = useState(0);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -37,13 +32,6 @@ const Auth = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
-
-  useEffect(() => {
-    if (resendTimer > 0) {
-      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [resendTimer]);
 
 
   const handleMagicLink = async (e: React.FormEvent) => {
@@ -91,98 +79,6 @@ const Auth = () => {
     }
   };
 
-  const handlePhoneAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!phone.trim()) {
-      toast({
-        title: "Phone required",
-        description: "Please enter your phone number",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: phone.trim(),
-      });
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        setPhoneSent(true);
-        setResendTimer(60);
-        toast({
-          title: "Check your messages",
-          description: "We sent you a 6-digit code via SMS",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!otp.trim() || otp.length !== 6) {
-      toast({
-        title: "Invalid code",
-        description: "Please enter the 6-digit code",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.verifyOtp({
-        phone: phone.trim(),
-        token: otp.trim(),
-        type: 'sms',
-      });
-
-      if (error) {
-        toast({
-          title: "Verification failed",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: "You're now signed in",
-        });
-        navigate("/");
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendCode = async () => {
-    setOtp("");
-    await handlePhoneAuth({ preventDefault: () => {} } as React.FormEvent);
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -193,14 +89,7 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="email" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="email">Email</TabsTrigger>
-              <TabsTrigger value="phone">Phone</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="email" className="mt-4">
-              {emailSent ? (
+          {emailSent ? (
                 <div className="text-center space-y-4">
                   <div className="p-4 rounded-full bg-primary/10 w-16 h-16 mx-auto flex items-center justify-center">
                     <Mail className="h-8 w-8 text-primary" />
@@ -245,90 +134,6 @@ const Auth = () => {
                   </Button>
                 </form>
               )}
-            </TabsContent>
-            
-            <TabsContent value="phone" className="mt-4">
-              {phoneSent ? (
-                <form onSubmit={handleVerifyOtp} className="space-y-4">
-                  <div className="text-center mb-4">
-                    <div className="p-4 rounded-full bg-primary/10 w-16 h-16 mx-auto flex items-center justify-center mb-3">
-                      <Phone className="h-8 w-8 text-primary" />
-                    </div>
-                    <h3 className="font-semibold mb-2">Enter verification code</h3>
-                    <p className="text-sm text-muted-foreground">
-                      We sent a 6-digit code to <strong>{phone}</strong>
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="otp">Verification Code</Label>
-                    <Input
-                      id="otp"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      placeholder="000000"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                      disabled={loading}
-                      autoFocus
-                      className="text-center text-2xl tracking-widest"
-                    />
-                  </div>
-                  
-                  <Button type="submit" className="w-full" disabled={loading || otp.length !== 6}>
-                    {loading ? "Verifying..." : "Verify & Sign In"}
-                  </Button>
-                  
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleResendCode}
-                      disabled={loading || resendTimer > 0}
-                      className="flex-1"
-                    >
-                      {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend code"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setPhoneSent(false);
-                        setOtp("");
-                        setResendTimer(0);
-                      }}
-                      className="flex-1"
-                    >
-                      Different number
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <form onSubmit={handlePhoneAuth} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone number</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      placeholder="+1234567890"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      disabled={loading}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Include country code (e.g., +1 for US)
-                    </p>
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    <Phone className="mr-2 h-4 w-4" />
-                    {loading ? "Sending..." : "Send code"}
-                  </Button>
-                </form>
-              )}
-            </TabsContent>
-          </Tabs>
         </CardContent>
       </Card>
     </div>
