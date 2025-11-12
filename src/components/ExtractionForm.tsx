@@ -4,9 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Sparkles, Camera } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Camera, Loader2 } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { Card } from "./ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface ExtractionFormProps {
   activeField: string | null;
@@ -14,6 +16,7 @@ interface ExtractionFormProps {
   extractions: ExtractionEntry[];
   pdfLoaded: boolean;
   onExtraction: (entry: ExtractionEntry) => void;
+  pdfText?: string;
 }
 
 const STEPS = [
@@ -32,10 +35,12 @@ export const ExtractionForm = ({
   onFieldFocus,
   extractions,
   pdfLoaded,
-  onExtraction
+  onExtraction,
+  pdfText
 }: ExtractionFormProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<Record<string, string>>({});
+  const [isExtractingPICOT, setIsExtractingPICOT] = useState(false);
 
   const currentStepData = STEPS[currentStep - 1];
 
@@ -59,6 +64,71 @@ export const ExtractionForm = ({
   const getFieldValue = (field: string) => {
     const extraction = extractions.find(e => e.fieldName === field);
     return extraction?.text || formData[field] || "";
+  };
+
+  const handleGeneratePICOT = async () => {
+    if (!pdfText || pdfText.trim().length === 0) {
+      toast.error("Please load a PDF first");
+      return;
+    }
+
+    setIsExtractingPICOT(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("extract-picot", {
+        body: { pdfText }
+      });
+
+      if (error) {
+        console.error("Edge function error:", error);
+        toast.error("Failed to extract PICO-T framework");
+        return;
+      }
+
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      const { picot } = data;
+      
+      // Update form data with extracted PICO-T elements
+      setFormData(prev => ({
+        ...prev,
+        population: picot.population,
+        intervention: picot.intervention,
+        comparator: picot.comparator,
+        outcomes: picot.outcomes,
+        timing: picot.timing
+      }));
+
+      // Create extraction entries for tracking
+      const timestamp = new Date();
+      const picotFields = [
+        { name: "population", value: picot.population },
+        { name: "intervention", value: picot.intervention },
+        { name: "comparator", value: picot.comparator },
+        { name: "outcomes", value: picot.outcomes },
+        { name: "timing", value: picot.timing }
+      ];
+
+      picotFields.forEach((field) => {
+        onExtraction({
+          id: `picot-ai-${field.name}-${Date.now()}`,
+          fieldName: field.name,
+          text: field.value,
+          page: 1,
+          method: "ai",
+          timestamp
+        });
+      });
+
+      toast.success("PICO-T framework extracted successfully!");
+    } catch (error) {
+      console.error("Error extracting PICO-T:", error);
+      toast.error("An error occurred during extraction");
+    } finally {
+      setIsExtractingPICOT(false);
+    }
   };
 
   return (
@@ -181,9 +251,23 @@ export const ExtractionForm = ({
                       <p className="text-xs text-muted-foreground mb-3">
                         Let AI analyze your PDF and generate the PICO-T framework automatically
                       </p>
-                      <Button size="sm" className="gap-2 bg-gradient-to-r from-primary to-accent">
-                        <Sparkles className="h-3 w-3" />
-                        Generate PICO-T Framework
+                      <Button 
+                        size="sm" 
+                        className="gap-2 bg-gradient-to-r from-primary to-accent"
+                        onClick={handleGeneratePICOT}
+                        disabled={!pdfLoaded || isExtractingPICOT}
+                      >
+                        {isExtractingPICOT ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3 w-3" />
+                            Generate PICO-T Framework
+                          </>
+                        )}
                       </Button>
                     </div>
                   </div>

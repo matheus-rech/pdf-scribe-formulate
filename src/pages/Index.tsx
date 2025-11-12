@@ -29,6 +29,7 @@ const Index = () => {
   const [activeField, setActiveField] = useState<string | null>(null);
   const [extractions, setExtractions] = useState<ExtractionEntry[]>([]);
   const [scale, setScale] = useState(1);
+  const [pdfText, setPdfText] = useState<string>("");
 
   const {
     currentProject,
@@ -185,6 +186,7 @@ const Index = () => {
           extractions={extractions}
           pdfLoaded={!!pdfFile}
           onExtraction={handleExtraction}
+          pdfText={pdfText}
         />
       </div>
 
@@ -203,6 +205,7 @@ const Index = () => {
             onScaleChange={setScale}
             extractions={extractions}
             onAnnotationsImport={handleAnnotationsImport}
+            onPdfTextExtracted={setPdfText}
           />
       </div>
 

@@ -26,6 +26,7 @@ interface PDFViewerProps {
   onScaleChange: (scale: number) => void;
   extractions: ExtractionEntry[];
   onAnnotationsImport?: (annotations: PDFAnnotation[]) => void;
+  onPdfTextExtracted?: (text: string) => void;
 }
 
 export const PDFViewer = ({
@@ -40,7 +41,8 @@ export const PDFViewer = ({
   scale,
   onScaleChange,
   extractions,
-  onAnnotationsImport
+  onAnnotationsImport,
+  onPdfTextExtracted
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -71,6 +73,20 @@ export const PDFViewer = ({
         setPdfDocument(pdf);
         onTotalPagesChange(pdf.numPages);
         onPageChange(1);
+        
+        // Extract all text from PDF for AI analysis
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map((item: any) => item.str).join(" ");
+          fullText += `\n\n[Page ${i}]\n${pageText}`;
+        }
+        
+        if (onPdfTextExtracted) {
+          onPdfTextExtracted(fullText);
+        }
+        
         toast.success(`PDF loaded: ${pdf.numPages} pages`);
       } catch (error) {
         console.error("Error loading PDF:", error);
