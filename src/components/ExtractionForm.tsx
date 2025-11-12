@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2, Check, AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2, Check, AlertCircle, Save, Cloud, CloudOff } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { Card } from "./ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ValidationSummary } from "./ValidationSummary";
 
 interface ExtractionFormProps {
   activeField: string | null;
@@ -18,6 +20,7 @@ interface ExtractionFormProps {
   pdfLoaded: boolean;
   onExtraction: (entry: ExtractionEntry) => void;
   pdfText?: string;
+  studyId?: string;
 }
 
 interface StudyArm {
@@ -83,7 +86,8 @@ export const ExtractionForm = ({
   extractions,
   pdfLoaded,
   onExtraction,
-  pdfText
+  pdfText,
+  studyId
 }: ExtractionFormProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<Record<string, string>>({});
@@ -98,6 +102,12 @@ export const ExtractionForm = ({
     sourceText: string;
   }>>({});
   const [validatingFields, setValidatingFields] = useState<Set<string>>(new Set());
+  
+  // Auto-save state
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'unsaved'>('saved');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastFormDataRef = useRef<string>('');
   
   // Dynamic lists
   const [studyArms, setStudyArms] = useState<StudyArm[]>([]);
@@ -472,9 +482,186 @@ export const ExtractionForm = ({
     }
   };
 
+  // Auto-save functionality
+  const saveFormData = async () => {
+    if (!studyId) return;
+
+    const currentDataStr = JSON.stringify({
+      formData,
+      studyArms,
+      indications,
+      interventions,
+      mortalityData,
+      mrsData,
+      complications,
+      predictors,
+      currentStep,
+      validationResults
+    });
+
+    // Skip if data hasn't changed
+    if (currentDataStr === lastFormDataRef.current) {
+      return;
+    }
+
+    setSaveStatus('saving');
+
+    try {
+      // Generate a unique extraction_id for this autosave
+      const extractionId = `autosave-${studyId}`;
+      
+      // Save form progress to database
+      const { error } = await supabase
+        .from('extractions')
+        .upsert({
+          extraction_id: extractionId,
+          study_id: studyId,
+          field_name: 'form_progress',
+          text: currentDataStr,
+          method: 'autosave',
+          timestamp: new Date().toISOString()
+        }, {
+          onConflict: 'extraction_id'
+        });
+
+      if (error) throw error;
+
+      lastFormDataRef.current = currentDataStr;
+      setLastSaved(new Date());
+      setSaveStatus('saved');
+    } catch (error) {
+      console.error('Auto-save error:', error);
+      setSaveStatus('error');
+      toast.error('Failed to auto-save progress');
+    }
+  };
+
+  // Trigger auto-save on form data changes with debounce
+  useEffect(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    setSaveStatus('unsaved');
+
+    saveTimeoutRef.current = setTimeout(() => {
+      saveFormData();
+    }, 3000); // Save after 3 seconds of inactivity
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [formData, studyArms, indications, interventions, mortalityData, mrsData, complications, predictors, currentStep]);
+
+  // Load saved form data on mount
+  useEffect(() => {
+    const loadSavedData = async () => {
+      if (!studyId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('extractions')
+          .select('text')
+          .eq('study_id', studyId)
+          .eq('field_name', 'form_progress')
+          .single();
+
+        if (error) {
+          if (error.code !== 'PGRST116') { // Not found error
+            console.error('Load error:', error);
+          }
+          return;
+        }
+
+        if (data?.text) {
+          const savedData = JSON.parse(data.text);
+          setFormData(savedData.formData || {});
+          setStudyArms(savedData.studyArms || []);
+          setIndications(savedData.indications || []);
+          setInterventions(savedData.interventions || []);
+          setMortalityData(savedData.mortalityData || []);
+          setMRSData(savedData.mrsData || []);
+          setComplications(savedData.complications || []);
+          setPredictors(savedData.predictors || []);
+          setCurrentStep(savedData.currentStep || 1);
+          setValidationResults(savedData.validationResults || {});
+          
+          lastFormDataRef.current = data.text;
+          setLastSaved(new Date());
+          toast.success('Previous progress restored');
+        }
+      } catch (error) {
+        console.error('Error loading saved data:', error);
+      }
+    };
+
+    loadSavedData();
+  }, [studyId]);
+
+  const getSaveStatusIcon = () => {
+    switch (saveStatus) {
+      case 'saving':
+        return <Loader2 className="h-3 w-3 animate-spin text-blue-500" />;
+      case 'saved':
+        return <Cloud className="h-3 w-3 text-green-500" />;
+      case 'error':
+        return <CloudOff className="h-3 w-3 text-red-500" />;
+      case 'unsaved':
+        return <Save className="h-3 w-3 text-yellow-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const getSaveStatusText = () => {
+    switch (saveStatus) {
+      case 'saving':
+        return 'Saving...';
+      case 'saved':
+        return lastSaved ? `Saved ${formatTimeSince(lastSaved)}` : 'Saved';
+      case 'error':
+        return 'Save failed';
+      case 'unsaved':
+        return 'Unsaved changes';
+      default:
+        return '';
+    }
+  };
+
+  const formatTimeSince = (date: Date) => {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Save Status Indicator */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {getSaveStatusIcon()}
+            <span>{getSaveStatusText()}</span>
+          </div>
+          {studyId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={saveFormData}
+              disabled={saveStatus === 'saving'}
+              className="h-7 text-xs"
+            >
+              <Save className="h-3 w-3 mr-1" />
+              Save Now
+            </Button>
+          )}
+        </div>
+
         {/* Step Indicator */}
         <div className="flex items-center justify-between mb-4">
           <div className="text-sm text-muted-foreground">
@@ -495,6 +682,13 @@ export const ExtractionForm = ({
             ))}
           </div>
         </div>
+
+        {/* Validation Summary Panel */}
+        <ValidationSummary 
+          validationResults={validationResults}
+          formData={formData}
+          currentStep={currentStep}
+        />
 
         <div>
           <h2 className="text-xl font-semibold mb-1">{STEPS[currentStep - 1].title}</h2>
