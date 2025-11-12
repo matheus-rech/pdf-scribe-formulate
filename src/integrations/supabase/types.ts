@@ -14,7 +14,86 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      extractions: {
+        Row: {
+          coordinates: Json | null
+          created_at: string
+          extraction_id: string
+          field_name: string
+          id: string
+          image_data: string | null
+          method: string | null
+          page: number | null
+          project_id: string
+          text: string | null
+          timestamp: string | null
+        }
+        Insert: {
+          coordinates?: Json | null
+          created_at?: string
+          extraction_id: string
+          field_name: string
+          id?: string
+          image_data?: string | null
+          method?: string | null
+          page?: number | null
+          project_id: string
+          text?: string | null
+          timestamp?: string | null
+        }
+        Update: {
+          coordinates?: Json | null
+          created_at?: string
+          extraction_id?: string
+          field_name?: string
+          id?: string
+          image_data?: string | null
+          method?: string | null
+          page?: number | null
+          project_id?: string
+          text?: string | null
+          timestamp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extractions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+          pdf_name: string | null
+          total_pages: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          pdf_name?: string | null
+          total_pages?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          pdf_name?: string | null
+          total_pages?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
