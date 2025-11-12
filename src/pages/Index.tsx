@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useStudyStorage } from "@/hooks/use-study-storage";
 import type { SourceCitation } from "@/lib/citationDetector";
+import { AuditReportDialog } from "@/components/AuditReportDialog";
+import { BatchRevalidationDialog } from "@/components/BatchRevalidationDialog";
 
 export interface ExtractionEntry {
   id: string;
@@ -149,6 +151,31 @@ const Index = () => {
         entry.id === id ? { ...entry, ...updates } : entry
       )
     );
+    
+    // Save to database if study is selected
+    if (currentStudy) {
+      const updatedExtraction = extractions.find(e => e.id === id);
+      if (updatedExtraction) {
+        saveExtraction(currentStudy.id, { ...updatedExtraction, ...updates });
+      }
+    }
+  };
+
+  const handleBatchUpdateExtractions = (updated: ExtractionEntry[]) => {
+    // Update state
+    updated.forEach(ext => {
+      setExtractions(prev => 
+        prev.map(e => e.id === ext.id ? ext : e)
+      );
+    });
+    
+    // Save to database
+    if (currentStudy) {
+      updated.forEach(async (ext) => {
+        await saveExtraction(currentStudy.id, ext);
+      });
+      toast.success('Citations updated successfully');
+    }
   };
 
   const handleJumpToExtraction = (entry: ExtractionEntry) => {
@@ -310,7 +337,25 @@ const Index = () => {
 
       {/* Right Panel - Trace Log */}
       <div className="w-[25%] border-l border-border bg-card overflow-y-auto">
-        <TraceLog 
+        <div className="p-3 border-b border-border bg-muted/30">
+          <div className="flex flex-col gap-2">
+            <AuditReportDialog
+              extractions={extractions}
+              studyInfo={{
+                id: currentStudy?.id || '',
+                name: currentStudy?.name || '',
+                pdfName: currentStudy?.pdf_name || '',
+                email: currentStudy?.email || email
+              }}
+              onJumpToExtraction={handleJumpToExtraction}
+            />
+            <BatchRevalidationDialog
+              extractions={extractions}
+              onUpdateExtractions={handleBatchUpdateExtractions}
+            />
+          </div>
+        </div>
+        <TraceLog
           extractions={extractions}
           onJumpToExtraction={handleJumpToExtraction}
           onClearAll={() => setExtractions([])}
