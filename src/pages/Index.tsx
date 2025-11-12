@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ExtractionForm } from "@/components/ExtractionForm";
 import { PDFViewer } from "@/components/PDFViewer";
 import { TraceLog } from "@/components/TraceLog";
+import { ProjectSelector } from "@/components/ProjectSelector";
 import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
 import { toast } from "sonner";
 import { FileText, User } from "lucide-react";
@@ -30,6 +31,7 @@ const Index = () => {
   const [extractions, setExtractions] = useState<ExtractionEntry[]>([]);
   const [scale, setScale] = useState(1);
   const [pdfText, setPdfText] = useState<string>("");
+  const [recentProjects, setRecentProjects] = useState<any[]>([]);
 
   const {
     currentProject,
@@ -37,7 +39,15 @@ const Index = () => {
     createProject,
     saveExtraction,
     loadExtractions,
+    getRecentProjects,
   } = useProjectStorage(email);
+
+  // Load recent projects when email is set
+  useEffect(() => {
+    if (emailSet) {
+      getRecentProjects().then(setRecentProjects);
+    }
+  }, [emailSet]);
 
   // Auto-create project when PDF is loaded
   useEffect(() => {
@@ -46,7 +56,11 @@ const Index = () => {
         `Study - ${new Date().toLocaleDateString()}`,
         pdfFile.name,
         totalPages
-      );
+      ).then((newProject) => {
+        if (newProject) {
+          getRecentProjects().then(setRecentProjects);
+        }
+      });
     }
   }, [pdfFile, totalPages, currentProject, emailSet]);
 
@@ -73,6 +87,27 @@ const Index = () => {
     } else {
       toast.error("Please enter an email");
     }
+  };
+
+  const handleProjectSelect = async (projectId: string) => {
+    const project = recentProjects.find((p) => p.id === projectId);
+    if (project) {
+      setCurrentProject(project);
+      const loadedExtractions = await loadExtractions(projectId);
+      setExtractions(loadedExtractions);
+      setPdfFile(null); // Clear current PDF when switching projects
+      toast.success(`Loaded project: ${project.name}`);
+    }
+  };
+
+  const handleNewProject = () => {
+    setCurrentProject(null);
+    setPdfFile(null);
+    setExtractions([]);
+    setPdfText("");
+    setCurrentPage(1);
+    setTotalPages(0);
+    toast.info("Ready for new project");
   };
 
   const handleUpdateExtraction = (id: string, updates: Partial<ExtractionEntry>) => {
@@ -164,7 +199,7 @@ const Index = () => {
       {/* Left Panel - Form */}
       <div className="w-[35%] border-r border-border bg-card overflow-y-auto">
         <div className="p-6 border-b border-border bg-gradient-to-r from-primary/5 to-accent/5">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary/10">
                 <FileText className="h-6 w-6 text-primary" />
@@ -175,9 +210,19 @@ const Index = () => {
               </div>
             </div>
           </div>
-          <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
-            <User className="h-3 w-3" />
-            {email}
+          
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <User className="h-3 w-3" />
+              {email}
+            </div>
+            
+            <ProjectSelector
+              projects={recentProjects}
+              currentProject={currentProject}
+              onProjectSelect={handleProjectSelect}
+              onNewProject={handleNewProject}
+            />
           </div>
         </div>
         <ExtractionForm
