@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Download, FileJson, FileSpreadsheet, FileText, Trash2, Image as ImageIcon } from "lucide-react";
+import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { toast } from "sonner";
 
@@ -65,6 +65,8 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceL
     .field { font-weight: bold; color: #1e40af; }
     .text { margin: 10px 0; padding: 10px; background: #f0f9ff; border-radius: 4px; }
     .meta { font-size: 12px; color: #666; }
+    .image-container { margin: 10px 0; }
+    .image-container img { max-width: 400px; border: 2px solid #2563eb; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -77,7 +79,10 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceL
       (e) => `
     <div class="entry">
       <div class="field">${e.fieldName}</div>
-      <div class="text">${e.text}</div>
+      ${e.method === "image" && e.imageData 
+        ? `<div class="image-container"><img src="${e.imageData}" alt="Extracted image"></div>`
+        : `<div class="text">${e.text}</div>`
+      }
       <div class="meta">Page ${e.page} • ${e.method} • ${e.timestamp.toLocaleString()}</div>
     </div>
   `
@@ -95,6 +100,17 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceL
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Exported audit report");
+  };
+
+  const downloadImage = (entry: ExtractionEntry, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!entry.imageData) return;
+
+    const link = document.createElement("a");
+    link.href = entry.imageData;
+    link.download = `${entry.fieldName}-page${entry.page}-${Date.now()}.png`;
+    link.click();
+    toast.success("Image downloaded");
   };
 
   const getMethodColor = (method: string) => {
@@ -195,16 +211,49 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceL
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="font-medium text-sm">{entry.fieldName}</div>
-                {getMethodBadge(entry.method)}
+                <div className="flex items-center gap-2">
+                  {entry.method === "image" && entry.imageData && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => downloadImage(entry, e)}
+                      className="h-6 w-6 p-0 hover:bg-extraction-image/10"
+                      title="Download image"
+                    >
+                      <Download className="h-3 w-3 text-extraction-image" />
+                    </Button>
+                  )}
+                  {getMethodBadge(entry.method)}
+                </div>
               </div>
               
               {entry.method === "image" && entry.imageData ? (
-                <div className="my-2">
+                <div className="my-2 group relative">
                   <img
                     src={entry.imageData}
                     alt="Extracted region"
-                    className="w-full rounded border border-border"
+                    className="w-full rounded border border-extraction-image shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Open in new tab for full view
+                      const win = window.open();
+                      if (win) {
+                        win.document.write(`
+                          <html>
+                            <head><title>Extracted Image - ${entry.fieldName}</title></head>
+                            <body style="margin:0;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh;">
+                              <img src="${entry.imageData}" style="max-width:100%;height:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+                            </body>
+                          </html>
+                        `);
+                      }
+                    }}
                   />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors rounded flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <span className="text-xs bg-white/90 px-2 py-1 rounded shadow-sm">
+                      Click to enlarge
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded mb-2 line-clamp-2">

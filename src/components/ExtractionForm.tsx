@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Camera } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { Card } from "./ui/card";
 
@@ -259,6 +259,24 @@ export const ExtractionForm = ({
             {/* Step 3: Demographics */}
             {currentStep === 3 && (
               <>
+                <Card className="p-4 bg-info/5 border-info/20 mb-4">
+                  <div className="flex items-start gap-3">
+                    <Camera className="h-5 w-5 text-info mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-sm mb-1">💡 Tip: Capture Images from PDF</h3>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Use <strong>Image Mode</strong> to capture figures, tables, or any visual content directly from the PDF
+                      </p>
+                      <ol className="text-xs text-muted-foreground space-y-1 ml-4 list-decimal">
+                        <li>Click the <strong>📷 Image</strong> button in the PDF toolbar</li>
+                        <li>Select a field (any field can contain images)</li>
+                        <li>Click and drag to select the region you want to capture</li>
+                        <li>The image will be saved and displayed in the trace log</li>
+                      </ol>
+                    </div>
+                  </div>
+                </Card>
+
                 <div className="space-y-2">
                   <Label htmlFor="sampleSize">Sample Size</Label>
                   <Input

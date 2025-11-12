@@ -205,10 +205,49 @@ export const PDFViewer = ({
   };
 
   const handleRegionMouseUp = async () => {
-    if (!isSelecting || !selectionBox || !activeField) return;
+    if (!isSelecting || !selectionBox || !activeField || !canvasRef.current) return;
 
-    // Extract text from region (simplified - in production, use actual text layer coordinates)
-    const extractedText = `[Region: ${selectionBox.width.toFixed(0)}x${selectionBox.height.toFixed(0)}px]`;
+    let extractedText = `[Region: ${selectionBox.width.toFixed(0)}x${selectionBox.height.toFixed(0)}px]`;
+    let imageData: string | undefined = undefined;
+
+    // If in image mode, capture the actual image
+    if (imageMode) {
+      try {
+        const canvas = canvasRef.current;
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        if (tempCtx) {
+          // Set canvas size to selection box size
+          tempCanvas.width = selectionBox.width;
+          tempCanvas.height = selectionBox.height;
+          
+          // Draw the selected region from the main canvas
+          tempCtx.drawImage(
+            canvas,
+            selectionBox.x, // source x
+            selectionBox.y, // source y
+            selectionBox.width, // source width
+            selectionBox.height, // source height
+            0, // destination x
+            0, // destination y
+            selectionBox.width, // destination width
+            selectionBox.height // destination height
+          );
+          
+          // Convert to PNG base64
+          imageData = tempCanvas.toDataURL('image/png');
+          extractedText = `[Image: ${selectionBox.width.toFixed(0)}x${selectionBox.height.toFixed(0)}px]`;
+          
+          toast.success(`Image captured to ${activeField}`);
+        }
+      } catch (error) {
+        console.error('Error capturing image:', error);
+        toast.error('Failed to capture image');
+      }
+    } else {
+      toast.success(`Region extracted to ${activeField}`);
+    }
 
     onExtraction({
       id: `extraction-${Date.now()}`,
@@ -216,11 +255,10 @@ export const PDFViewer = ({
       text: extractedText,
       page: currentPage,
       coordinates: selectionBox,
-      method: "region",
+      method: imageMode ? "image" : "region",
       timestamp: new Date(),
+      imageData,
     });
-
-    toast.success(`Region extracted to ${activeField}`);
 
     setIsSelecting(false);
     setSelectionStart(null);
@@ -344,9 +382,30 @@ export const PDFViewer = ({
         </div>
 
         {activeField && (
-          <div className="ml-auto text-sm px-3 py-1 bg-primary/10 text-primary rounded-md border border-primary/20 flex items-center gap-2">
-            <FileText className="h-3 w-3" />
-            Active: {activeField}
+          <div className="ml-auto flex items-center gap-2">
+            <div className="text-sm px-3 py-1 bg-primary/10 text-primary rounded-md border border-primary/20 flex items-center gap-2">
+              <FileText className="h-3 w-3" />
+              Active: {activeField}
+            </div>
+            {(regionMode || imageMode) && (
+              <div className={`text-xs px-2 py-1 rounded-md border flex items-center gap-1 ${
+                imageMode 
+                  ? "bg-extraction-image/10 text-extraction-image border-extraction-image/20"
+                  : "bg-accent/10 text-accent border-accent/20"
+              }`}>
+                {imageMode ? (
+                  <>
+                    <Camera className="h-3 w-3" />
+                    Image Mode
+                  </>
+                ) : (
+                  <>
+                    <Box className="h-3 w-3" />
+                    Region Mode
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -389,7 +448,11 @@ export const PDFViewer = ({
               {/* Selection box overlay */}
               {isSelecting && selectionBox && (
                 <div
-                  className="absolute border-3 border-dashed border-info bg-info/10"
+                  className={`absolute border-3 border-dashed ${
+                    imageMode 
+                      ? "border-extraction-image bg-extraction-image/10" 
+                      : "border-info bg-info/10"
+                  }`}
                   style={{
                     left: selectionBox.x,
                     top: selectionBox.y,
@@ -397,7 +460,13 @@ export const PDFViewer = ({
                     height: selectionBox.height,
                     pointerEvents: "none",
                   }}
-                />
+                >
+                  {imageMode && (
+                    <div className="absolute -top-7 left-0 bg-extraction-image text-white text-xs px-2 py-1 rounded">
+                      📷 Image Capture
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Extraction markers */}
@@ -406,14 +475,14 @@ export const PDFViewer = ({
                 .map((extraction) => (
                   <div
                     key={extraction.id}
-                    className={`absolute border-2 pointer-events-none ${
+                    className={`absolute border-2 pointer-events-auto cursor-pointer transition-all hover:shadow-lg group ${
                       extraction.method === "manual"
-                        ? "border-extraction-manual bg-extraction-manual/10"
+                        ? "border-extraction-manual bg-extraction-manual/10 hover:bg-extraction-manual/20"
                         : extraction.method === "ai"
-                        ? "border-extraction-ai bg-extraction-ai/10"
+                        ? "border-extraction-ai bg-extraction-ai/10 hover:bg-extraction-ai/20"
                         : extraction.method === "image"
-                        ? "border-extraction-image bg-extraction-image/10"
-                        : "border-extraction-search bg-extraction-search/10"
+                        ? "border-extraction-image bg-extraction-image/10 hover:bg-extraction-image/20"
+                        : "border-extraction-search bg-extraction-search/10 hover:bg-extraction-search/20"
                     }`}
                     style={{
                       left: extraction.coordinates!.x,
@@ -421,7 +490,12 @@ export const PDFViewer = ({
                       width: extraction.coordinates!.width,
                       height: extraction.coordinates!.height,
                     }}
-                  />
+                    title={`${extraction.fieldName} (${extraction.method})`}
+                  >
+                    <div className="absolute -top-7 left-0 bg-card border border-border rounded px-2 py-1 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity shadow-lg whitespace-nowrap z-10">
+                      📋 {extraction.fieldName}
+                    </div>
+                  </div>
                 ))}
             </div>
           </div>
