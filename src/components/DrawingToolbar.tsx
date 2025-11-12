@@ -3,7 +3,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   MousePointer, Pen, Square, Circle, Type, Eraser, Trash2, Save, Undo, Redo,
-  Minus, ArrowRight, Pentagon, Highlighter, ChevronsUp, ChevronsDown, Trash
+  Minus, ArrowRight, Pentagon, Highlighter, ChevronsUp, ChevronsDown, Trash, FileDown
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -20,6 +20,7 @@ interface DrawingToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onSave: () => void;
+  onExport?: () => void;
   canUndo: boolean;
   canRedo: boolean;
   selectedObject?: any;
@@ -48,6 +49,7 @@ export const DrawingToolbar = ({
   onUndo,
   onRedo,
   onSave,
+  onExport,
   canUndo,
   canRedo,
   selectedObject,
@@ -262,6 +264,19 @@ export const DrawingToolbar = ({
         <Save className="h-4 w-4" />
         Save
       </Button>
+
+      {onExport && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onExport}
+          className="gap-2"
+          title="Export Annotations"
+        >
+          <FileDown className="h-4 w-4" />
+          Export
+        </Button>
+      )}
     </div>
   );
 };

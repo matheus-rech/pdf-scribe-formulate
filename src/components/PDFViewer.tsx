@@ -11,6 +11,7 @@ import type { RenderHighlightContentProps, RenderHighlightsProps } from '@react-
 import type { ExtractionEntry } from "@/pages/Index";
 import { extractAnnotationsFromPDF, type PDFAnnotation } from "@/lib/annotationParser";
 import { AnnotationImportDialog } from "./AnnotationImportDialog";
+import { AnnotationExportDialog } from "./AnnotationExportDialog";
 import { DrawingToolbar, type DrawingTool } from "./DrawingToolbar";
 import { useAnnotationCanvas } from "@/hooks/useAnnotationCanvas";
 import { usePageAnnotations } from "@/hooks/usePageAnnotations";
@@ -65,6 +66,7 @@ export const PDFViewer = ({
   const [pageTextCache, setPageTextCache] = useState<Map<number, any>>(new Map());
   const [searchOpen, setSearchOpen] = useState(false);
   const [annotationDialogOpen, setAnnotationDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [isLoadingAnnotations, setIsLoadingAnnotations] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -82,6 +84,7 @@ export const PDFViewer = ({
     clearPageAnnotation, 
     hasAnnotation,
     getAllAnnotations,
+    pageAnnotations,
   } = usePageAnnotations();
 
   const {
@@ -596,6 +599,22 @@ export const PDFViewer = ({
     }
   };
 
+  const handleJSONImport = (annotations: any[]) => {
+    // Restore annotations to pageAnnotations state
+    annotations.forEach((ann) => {
+      savePageAnnotation(ann.pageNumber, ann.canvasJSON, ann.thumbnail);
+    });
+    
+    // If we're on one of the imported pages, load it to canvas
+    const currentPageAnnotation = annotations.find(a => a.pageNumber === currentPage);
+    if (currentPageAnnotation && fabricCanvas) {
+      fabricCanvas.loadFromJSON(currentPageAnnotation.canvasJSON, () => {
+        fabricCanvas.renderAll();
+        initializeHistory();
+      });
+    }
+  };
+
   const handleDocumentLoad = (e: any) => {
     onTotalPagesChange(e.doc.numPages);
     toast.success(`PDF loaded: ${e.doc.numPages} pages`);
@@ -810,6 +829,14 @@ export const PDFViewer = ({
           onOpenChange={setAnnotationDialogOpen}
           importResult={importResult}
           onImport={handleAnnotationsSelected}
+          onImportJSON={handleJSONImport}
+        />
+
+        <AnnotationExportDialog
+          open={exportDialogOpen}
+          onOpenChange={setExportDialogOpen}
+          pageAnnotations={getAllAnnotations()}
+          pdfFileName={file?.name || "document"}
         />
 
         {/* Drawing Toolbar */}
@@ -830,6 +857,7 @@ export const PDFViewer = ({
               onUndo={undo}
               onRedo={redo}
               onSave={handleSaveAnnotations}
+              onExport={() => setExportDialogOpen(true)}
               canUndo={canUndo}
               canRedo={canRedo}
               selectedObject={selectedObject}

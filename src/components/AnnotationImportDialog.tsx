@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, CheckCircle2, AlertCircle, Sparkles, Import } from "lucide-react";
+import { FileText, CheckCircle2, AlertCircle, Sparkles, Import, Upload } from "lucide-react";
 import type { PDFAnnotation, AnnotationImportResult } from "@/lib/annotationParser";
 import { getAnnotationColor } from "@/lib/annotationParser";
+import { parseAnnotationJSON } from "@/lib/annotationExport";
+import type { PageAnnotation } from "@/hooks/usePageAnnotations";
 import { toast } from "sonner";
 
 interface AnnotationImportDialogProps {
@@ -15,6 +17,7 @@ interface AnnotationImportDialogProps {
   onOpenChange: (open: boolean) => void;
   importResult: AnnotationImportResult | null;
   onImport: (selectedAnnotations: PDFAnnotation[]) => void;
+  onImportJSON?: (annotations: PageAnnotation[]) => void;
 }
 
 export const AnnotationImportDialog = ({
@@ -22,10 +25,78 @@ export const AnnotationImportDialog = ({
   onOpenChange,
   importResult,
   onImport,
+  onImportJSON,
 }: AnnotationImportDialogProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!importResult) return null;
+  const handleJSONFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const result = parseAnnotationJSON(text);
+
+      if (!result.success || !result.data) {
+        toast.error(result.error || "Invalid JSON file");
+        return;
+      }
+
+      if (onImportJSON) {
+        onImportJSON(result.data.annotations);
+        toast.success(`Imported ${result.data.annotations.length} page annotations from JSON`);
+        onOpenChange(false);
+      }
+    } catch (error) {
+      console.error("JSON import error:", error);
+      toast.error("Failed to import JSON file");
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  if (!importResult) {
+    // Show JSON import option when no PDF import result
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import Annotations</DialogTitle>
+            <DialogDescription>
+              Import annotations from a JSON backup file
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Card className="p-6 border-dashed border-2 hover:border-primary/50 transition-colors cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}>
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="rounded-lg bg-primary/10 p-3">
+                  <Upload className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold mb-1">Upload JSON File</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Click to select a JSON annotation backup file
+                  </p>
+                </div>
+              </div>
+            </Card>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleJSONFileUpload}
+              className="hidden"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   const { annotations, summary } = importResult;
 
