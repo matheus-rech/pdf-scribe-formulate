@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon, Sparkles, Link2, MapPin, CheckCircle } from "lucide-react";
+import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon, Sparkles, Link2, MapPin, CheckCircle, CheckSquare } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { toast } from "sonner";
 import { OCRDialog } from "./OCRDialog";
 import { OCRInfoCard } from "./OCRInfoCard";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Badge } from "@/components/ui/badge";
+import { BulkEditDialog } from "./BulkEditDialog";
 import type { SourceCitation } from "@/lib/citationDetector";
 import { detectSourceCitations } from "@/lib/citationDetector";
 import { validateAllCitations, getCitationConfidenceColor, getCitationConfidenceBadge } from "@/lib/citationValidation";
@@ -39,11 +40,47 @@ export const TraceLog = ({
   const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
   const [selectedImageForOCR, setSelectedImageForOCR] = useState<{ data: string; entryId: string } | null>(null);
   const [detectingSource, setDetectingSource] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filteredExtractions = extractions.filter((entry) =>
     entry.fieldName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     entry.text.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredExtractions.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredExtractions.map(e => e.id));
+    }
+  };
+
+  const handleBulkUpdate = (updates: { validation_status?: string; notes?: string }) => {
+    if (!onUpdateExtraction) return;
+
+    selectedIds.forEach(id => {
+      const typedUpdates: Partial<ExtractionEntry> = {};
+      
+      if (updates.validation_status) {
+        typedUpdates.validation_status = updates.validation_status as "validated" | "questionable" | "pending";
+      }
+      
+      // Note: notes field doesn't exist on ExtractionEntry, so we skip it for now
+      // You may need to add this field to the ExtractionEntry interface if needed
+      
+      onUpdateExtraction(id, typedUpdates);
+    });
+
+    setSelectedIds([]);
+    setSelectionMode(false);
+  };
 
   const exportJSON = () => {
     const data = JSON.stringify(extractions, null, 2);
@@ -316,15 +353,52 @@ export const TraceLog = ({
 
         {/* Batch detection button */}
         {pdfFile && extractions.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={detectAllSources}
-            className="w-full gap-2 text-xs"
-          >
-            <MapPin className="h-3 w-3" />
-            Auto-Detect All Sources
-          </Button>
+          <div className="space-y-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={detectAllSources}
+              className="w-full gap-2 text-xs"
+            >
+              <MapPin className="h-3 w-3" />
+              Auto-Detect All Sources
+            </Button>
+            
+            {/* Bulk Edit Controls */}
+            <div className="flex gap-2">
+              <Button
+                variant={selectionMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setSelectionMode(!selectionMode);
+                  setSelectedIds([]);
+                }}
+                className="flex-1 gap-2 text-xs"
+              >
+                <CheckSquare className="h-3 w-3" />
+                {selectionMode ? "Cancel" : "Select"}
+              </Button>
+              
+              {selectionMode && (
+                <BulkEditDialog
+                  selectedIds={selectedIds}
+                  onBulkUpdate={handleBulkUpdate}
+                  onClearSelection={() => setSelectedIds([])}
+                />
+              )}
+            </div>
+            
+            {selectionMode && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleSelectAll}
+                className="w-full text-xs"
+              >
+                {selectedIds.length === filteredExtractions.length ? "Deselect All" : "Select All"}
+              </Button>
+            )}
+          </div>
         )}
 
         {extractions.length > 0 && (
@@ -349,18 +423,36 @@ export const TraceLog = ({
             </p>
           </Card>
         ) : (
-          filteredExtractions.reverse().map((entry) => (
+          filteredExtractions.reverse().map((entry) => {
+            const isSelected = selectedIds.includes(entry.id);
+            
+            return (
             <Card
               key={entry.id}
               className={`p-3 cursor-pointer hover:shadow-md transition-all border-l-4 ${getMethodColor(
                 entry.method
-              )}`}
-              onClick={() => onJumpToExtraction(entry)}
-              onMouseEnter={() => onHighlightSources?.(entry.sourceCitations)}
-              onMouseLeave={() => onClearSourceHighlights?.()}
+              )} ${isSelected ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+              onClick={() => {
+                if (selectionMode) {
+                  toggleSelection(entry.id);
+                } else {
+                  onJumpToExtraction(entry);
+                }
+              }}
+              onMouseEnter={() => !selectionMode && onHighlightSources?.(entry.sourceCitations)}
+              onMouseLeave={() => !selectionMode && onClearSourceHighlights?.()}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2 flex-1">
+                  {selectionMode && (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelection(entry.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                  )}
                   <div className="font-medium text-sm">{entry.fieldName}</div>
                   
                   {/* Citation indicator */}
@@ -529,7 +621,8 @@ export const TraceLog = ({
                 </Button>
               )}
             </Card>
-          ))
+          );
+          })
         )}
       </div>
 
