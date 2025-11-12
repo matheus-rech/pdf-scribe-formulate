@@ -7,7 +7,7 @@ import { StudyManager } from "@/components/StudyManager";
 import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
 import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
 import { toast } from "sonner";
-import { FileText, User, LogOut } from "lucide-react";
+import { FileText, User, LogOut, ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStudyStorage } from "@/hooks/use-study-storage";
 import { detectSourceCitations, type SourceCitation } from "@/lib/citationDetector";
@@ -16,6 +16,9 @@ import { BatchRevalidationDialog } from "@/components/BatchRevalidationDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import type { ImperativePanelHandle } from "react-resizable-panels";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 export interface ExtractionEntry {
   id: string;
@@ -48,6 +51,35 @@ const Index = () => {
   const [isCreatingStudy, setIsCreatingStudy] = useState(false);
   const [highlightedSources, setHighlightedSources] = useState<SourceCitation[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Panel collapse states
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(() => {
+    const saved = localStorage.getItem('leftPanelCollapsed');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(() => {
+    const saved = localStorage.getItem('rightPanelCollapsed');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const leftPanelRef = useRef<ImperativePanelHandle>(null);
+  const rightPanelRef = useRef<ImperativePanelHandle>(null);
+
+  // Persist panel states
+  useEffect(() => {
+    localStorage.setItem('leftPanelCollapsed', JSON.stringify(leftPanelCollapsed));
+  }, [leftPanelCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem('rightPanelCollapsed', JSON.stringify(rightPanelCollapsed));
+  }, [rightPanelCollapsed]);
+
+  // Keyboard shortcuts for panel toggling
+  useKeyboardShortcuts({
+    onEscape: () => {
+      if (leftPanelCollapsed) leftPanelRef.current?.expand();
+      if (rightPanelCollapsed) rightPanelRef.current?.expand();
+    },
+  }, true);
 
   const {
     currentStudy,
@@ -341,20 +373,41 @@ const Index = () => {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Left Panel - Form */}
-      <div className="w-[35%] border-r border-border bg-card overflow-y-auto">
-        <div className="p-6 border-b border-border bg-gradient-to-r from-primary/5 to-accent/5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <FileText className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-card-foreground">Meta-Analysis Extractor</h1>
-              <p className="text-sm text-muted-foreground">Study-centric data extraction for systematic reviews</p>
-            </div>
-          </div>
-          
-          <div className="space-y-3">
+      <ResizablePanelGroup direction="horizontal">
+        {/* Left Panel - Form */}
+        <ResizablePanel
+          ref={leftPanelRef}
+          defaultSize={35}
+          minSize={20}
+          maxSize={50}
+          collapsible
+          collapsedSize={0}
+          onCollapse={() => setLeftPanelCollapsed(true)}
+          onExpand={() => setLeftPanelCollapsed(false)}
+          className="relative"
+        >
+          <div className="h-full border-r border-border bg-card overflow-y-auto flex flex-col">
+            <div className="p-6 border-b border-border bg-gradient-to-r from-primary/5 to-accent/5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <FileText className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-2xl font-bold text-card-foreground">Meta-Analysis Extractor</h1>
+                  <p className="text-sm text-muted-foreground">Study-centric data extraction for systematic reviews</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => leftPanelRef.current?.collapse()}
+                  className="h-8 w-8 shrink-0"
+                  title="Collapse panel (Esc to restore)"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <User className="h-3 w-3" />
@@ -388,22 +441,26 @@ const Index = () => {
               isReprocessing={isReprocessing}
             />
 
-            <ChunkDebugPanel currentStudy={currentStudy} extractions={extractions} />
+                <ChunkDebugPanel currentStudy={currentStudy} extractions={extractions} />
+              </div>
+            </div>
+            <ExtractionForm
+              activeField={activeField}
+              onFieldFocus={setActiveField}
+              extractions={extractions}
+              pdfLoaded={!!pdfFile}
+              onExtraction={handleExtraction}
+              pdfText={pdfText}
+              studyId={currentStudy?.id}
+            />
           </div>
-        </div>
-        <ExtractionForm
-          activeField={activeField}
-          onFieldFocus={setActiveField}
-          extractions={extractions}
-          pdfLoaded={!!pdfFile}
-          onExtraction={handleExtraction}
-          pdfText={pdfText}
-          studyId={currentStudy?.id}
-        />
-      </div>
+        </ResizablePanel>
 
-      {/* Center Panel - PDF Viewer */}
-      <div className="flex-1 flex flex-col bg-muted/30">
+        <ResizableHandle withHandle className="hover:bg-primary/20 transition-colors" />
+
+        {/* Center Panel - PDF Viewer */}
+        <ResizablePanel defaultSize={40} minSize={30}>
+          <div className="h-full flex flex-col bg-muted/30">
           <PDFViewer
             file={pdfFile}
             onFileChange={setPdfFile}
@@ -423,13 +480,38 @@ const Index = () => {
             studySections={currentStudy?.pdf_chunks?.sections}
             onBatchExtract={handleBatchExtract}
             isBatchExtracting={isBatchExtracting}
-          />
-      </div>
+            />
+          </div>
+        </ResizablePanel>
 
-      {/* Right Panel - Trace Log */}
-      <div className="w-[25%] border-l border-border bg-card overflow-y-auto">
-        <div className="p-3 border-b border-border bg-muted/30">
-          <div className="flex flex-col gap-2">
+        <ResizableHandle withHandle className="hover:bg-primary/20 transition-colors" />
+
+        {/* Right Panel - Trace Log */}
+        <ResizablePanel
+          ref={rightPanelRef}
+          defaultSize={25}
+          minSize={20}
+          maxSize={40}
+          collapsible
+          collapsedSize={0}
+          onCollapse={() => setRightPanelCollapsed(true)}
+          onExpand={() => setRightPanelCollapsed(false)}
+          className="relative"
+        >
+          <div className="h-full border-l border-border bg-card overflow-y-auto flex flex-col">
+            <div className="p-3 border-b border-border bg-muted/30">
+              <div className="flex items-center justify-between mb-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => rightPanelRef.current?.collapse()}
+                  className="h-8 w-8 shrink-0"
+                  title="Collapse panel (Esc to restore)"
+                >
+                  <PanelRightClose className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex flex-col gap-2">
             <AuditReportDialog
               extractions={extractions}
               studyInfo={{
@@ -449,21 +531,23 @@ const Index = () => {
                 studyId={currentStudy.id}
                 studyName={currentStudy.name}
               />
-            )}
+              )}
+              </div>
+            </div>
+            <TraceLog
+              extractions={extractions}
+              onJumpToExtraction={handleJumpToExtraction}
+              onClearAll={() => setExtractions([])}
+              onUpdateExtraction={handleUpdateExtraction}
+              onHighlightSources={handleHighlightSources}
+              onClearSourceHighlights={handleClearSourceHighlights}
+              onJumpToCitation={handleJumpToCitation}
+              pdfFile={pdfFile}
+              currentStudy={currentStudy}
+            />
           </div>
-        </div>
-        <TraceLog
-          extractions={extractions}
-          onJumpToExtraction={handleJumpToExtraction}
-          onClearAll={() => setExtractions([])}
-          onUpdateExtraction={handleUpdateExtraction}
-          onHighlightSources={handleHighlightSources}
-          onClearSourceHighlights={handleClearSourceHighlights}
-          onJumpToCitation={handleJumpToCitation}
-          pdfFile={pdfFile}
-          currentStudy={currentStudy}
-        />
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 };
