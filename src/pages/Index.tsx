@@ -3,6 +3,7 @@ import { ExtractionForm } from "@/components/ExtractionForm";
 import { PDFViewer } from "@/components/PDFViewer";
 import { TraceLog } from "@/components/TraceLog";
 import { StudyManager } from "@/components/StudyManager";
+import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
 import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
 import { toast } from "sonner";
 import { FileText, User } from "lucide-react";
@@ -51,7 +52,10 @@ const Index = () => {
     loadExtractions,
     getAllStudies,
     loadStudyPdf,
+    reprocessStudy,
   } = useStudyStorage(email);
+
+  const [isReprocessing, setIsReprocessing] = useState(false);
 
   // Load all studies when email is set
   useEffect(() => {
@@ -194,6 +198,17 @@ const Index = () => {
     setCurrentPage(citation.page);
   };
 
+  const handleReprocessStudy = async (studyId: string) => {
+    setIsReprocessing(true);
+    const success = await reprocessStudy(studyId);
+    if (success) {
+      // Refresh studies list
+      const updatedStudies = await getAllStudies();
+      setStudies(updatedStudies);
+    }
+    setIsReprocessing(false);
+  };
+
   const handleAnnotationsImport = (annotations: PDFAnnotation[]) => {
     const FIELD_NAMES = [
       "citation", "doi", "pmid", "journal", "year",
@@ -300,7 +315,11 @@ const Index = () => {
               currentStudy={currentStudy}
               onStudySelect={handleStudySelect}
               onNewStudy={handleNewStudy}
+              onReprocessStudy={handleReprocessStudy}
+              isReprocessing={isReprocessing}
             />
+
+            <ChunkDebugPanel currentStudy={currentStudy} />
           </div>
         </div>
         <ExtractionForm
@@ -332,6 +351,7 @@ const Index = () => {
             onPdfTextExtracted={setPdfText}
             highlightedSources={highlightedSources}
             onJumpToExtraction={handleJumpToExtraction}
+            studySections={currentStudy?.pdf_chunks?.sections}
           />
       </div>
 

@@ -186,6 +186,67 @@ export const useStudyStorage = (email: string | null) => {
     }
   };
 
+  // Re-process PDF to regenerate chunks
+  const reprocessStudy = async (studyId: string): Promise<boolean> => {
+    const study = await supabase
+      .from("studies")
+      .select("*")
+      .eq("id", studyId)
+      .single();
+
+    if (!study.data || !study.data.pdf_url) {
+      toast.error("Study not found or missing PDF");
+      return false;
+    }
+
+    setIsLoading(true);
+    try {
+      // Load PDF from storage
+      toast.info("Loading PDF from storage...");
+      const pdfFile = await loadStudyPdf(study.data);
+      if (!pdfFile) {
+        throw new Error("Failed to load PDF");
+      }
+
+      // Re-process PDF
+      toast.info("Re-processing PDF text...");
+      const processingResult = await processFullPDF(pdfFile, (current, total) => {
+        console.log(`Re-processing page ${current}/${total}`);
+      });
+      
+      const semanticChunks = createSemanticChunks(processingResult.pageChunks);
+      const sections = detectSections(processingResult.pageChunks);
+      
+      const pdfChunks = {
+        ...processingResult,
+        semanticChunks,
+        sections
+      };
+
+      // Update study with new chunks
+      const { error } = await supabase
+        .from("studies")
+        .update({ pdf_chunks: pdfChunks as any })
+        .eq("id", studyId);
+
+      if (error) throw error;
+
+      // Update current study if it matches
+      if (currentStudy?.id === studyId) {
+        setCurrentStudy({ ...study.data, pdf_chunks: pdfChunks });
+      }
+
+      toast.success("PDF re-processed successfully");
+      return true;
+    } catch (error: any) {
+      console.error("Error re-processing study:", error);
+      toast.error("Failed to re-process PDF");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     currentStudy,
     setCurrentStudy,
@@ -195,5 +256,6 @@ export const useStudyStorage = (email: string | null) => {
     loadExtractions,
     getAllStudies,
     loadStudyPdf,
+    reprocessStudy,
   };
 };

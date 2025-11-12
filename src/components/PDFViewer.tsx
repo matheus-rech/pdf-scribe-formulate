@@ -16,6 +16,7 @@ import { DrawingToolbar, type DrawingTool } from "./DrawingToolbar";
 import { HighlightToolbar } from "./HighlightToolbar";
 import { SearchPanel } from "./SearchPanel";
 import { CitationLinkPanel } from "./CitationLinkPanel";
+import { SectionNavigator } from "./SectionNavigator";
 import { useAnnotationCanvas } from "@/hooks/useAnnotationCanvas";
 import { usePageAnnotations } from "@/hooks/usePageAnnotations";
 import { useCanvasHistory } from "@/hooks/useCanvasHistory";
@@ -47,6 +48,13 @@ interface PDFViewerProps {
   onPdfTextExtracted?: (text: string) => void;
   highlightedSources?: SourceCitation[];
   onJumpToExtraction?: (extraction: ExtractionEntry) => void;
+  studySections?: Array<{
+    name: string;
+    type: string;
+    startPage: number;
+    endPage: number;
+    confidence: number;
+  }>;
 }
 
 export const PDFViewer = ({
@@ -64,7 +72,8 @@ export const PDFViewer = ({
   onAnnotationsImport,
   onPdfTextExtracted,
   highlightedSources = [],
-  onJumpToExtraction
+  onJumpToExtraction,
+  studySections
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
@@ -1039,6 +1048,15 @@ export const PDFViewer = ({
           </div>
         )}
       </div>
+
+      {/* Section Navigator */}
+      {studySections && studySections.length > 0 && (
+        <SectionNavigator
+          sections={studySections}
+          currentPage={currentPage}
+          onPageChange={onPageChange}
+        />
+      )}
 
       {/* PDF Display */}
       <div className="flex-1 overflow-auto bg-muted/30 p-4 relative">
