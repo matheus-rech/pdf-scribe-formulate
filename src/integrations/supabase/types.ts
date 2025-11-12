@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       extractions: {
         Row: {
+          confidence_score: number | null
           coordinates: Json | null
           created_at: string
           extraction_id: string
@@ -24,11 +25,15 @@ export type Database = {
           image_data: string | null
           method: string | null
           page: number | null
+          region: Json | null
+          source_citations: Json | null
           study_id: string
           text: string | null
           timestamp: string | null
+          validation_status: string | null
         }
         Insert: {
+          confidence_score?: number | null
           coordinates?: Json | null
           created_at?: string
           extraction_id: string
@@ -37,11 +42,15 @@ export type Database = {
           image_data?: string | null
           method?: string | null
           page?: number | null
+          region?: Json | null
+          source_citations?: Json | null
           study_id: string
           text?: string | null
           timestamp?: string | null
+          validation_status?: string | null
         }
         Update: {
+          confidence_score?: number | null
           coordinates?: Json | null
           created_at?: string
           extraction_id?: string
@@ -50,9 +59,12 @@ export type Database = {
           image_data?: string | null
           method?: string | null
           page?: number | null
+          region?: Json | null
+          source_citations?: Json | null
           study_id?: string
           text?: string | null
           timestamp?: string | null
+          validation_status?: string | null
         }
         Relationships: [
           {

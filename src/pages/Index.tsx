@@ -9,6 +9,7 @@ import { FileText, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useStudyStorage } from "@/hooks/use-study-storage";
+import type { SourceCitation } from "@/lib/citationDetector";
 
 export interface ExtractionEntry {
   id: string;
@@ -22,6 +23,7 @@ export interface ExtractionEntry {
   validation_status?: "validated" | "questionable" | "pending";
   confidence_score?: number;
   region?: { x: number; y: number; width: number; height: number };
+  sourceCitations?: SourceCitation[];
 }
 
 const Index = () => {
@@ -36,6 +38,7 @@ const Index = () => {
   const [pdfText, setPdfText] = useState<string>("");
   const [studies, setStudies] = useState<any[]>([]);
   const [isCreatingStudy, setIsCreatingStudy] = useState(false);
+  const [highlightedSources, setHighlightedSources] = useState<SourceCitation[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -150,6 +153,18 @@ const Index = () => {
 
   const handleJumpToExtraction = (entry: ExtractionEntry) => {
     setCurrentPage(entry.page);
+  };
+
+  const handleHighlightSources = (citations?: SourceCitation[]) => {
+    setHighlightedSources(citations || []);
+  };
+
+  const handleClearSourceHighlights = () => {
+    setHighlightedSources([]);
+  };
+
+  const handleJumpToCitation = (citation: SourceCitation) => {
+    setCurrentPage(citation.page);
   };
 
   const handleAnnotationsImport = (annotations: PDFAnnotation[]) => {
@@ -288,6 +303,8 @@ const Index = () => {
             extractions={extractions}
             onAnnotationsImport={handleAnnotationsImport}
             onPdfTextExtracted={setPdfText}
+            highlightedSources={highlightedSources}
+            onJumpToExtraction={handleJumpToExtraction}
           />
       </div>
 
@@ -298,6 +315,10 @@ const Index = () => {
           onJumpToExtraction={handleJumpToExtraction}
           onClearAll={() => setExtractions([])}
           onUpdateExtraction={handleUpdateExtraction}
+          onHighlightSources={handleHighlightSources}
+          onClearSourceHighlights={handleClearSourceHighlights}
+          onJumpToCitation={handleJumpToCitation}
+          pdfFile={pdfFile}
         />
       </div>
     </div>

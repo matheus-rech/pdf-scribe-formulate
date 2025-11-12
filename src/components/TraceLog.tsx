@@ -1,23 +1,40 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon, Sparkles } from "lucide-react";
+import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon, Sparkles, Link2, MapPin, CheckCircle } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { toast } from "sonner";
 import { OCRDialog } from "./OCRDialog";
 import { OCRInfoCard } from "./OCRInfoCard";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import type { SourceCitation } from "@/lib/citationDetector";
+import { detectSourceCitations } from "@/lib/citationDetector";
 
 interface TraceLogProps {
   extractions: ExtractionEntry[];
   onJumpToExtraction: (entry: ExtractionEntry) => void;
   onClearAll: () => void;
   onUpdateExtraction?: (id: string, updates: Partial<ExtractionEntry>) => void;
+  onHighlightSources?: (citations?: SourceCitation[]) => void;
+  onClearSourceHighlights?: () => void;
+  onJumpToCitation?: (citation: SourceCitation) => void;
+  pdfFile?: File | null;
 }
 
-export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll, onUpdateExtraction }: TraceLogProps) => {
+export const TraceLog = ({ 
+  extractions, 
+  onJumpToExtraction, 
+  onClearAll, 
+  onUpdateExtraction,
+  onHighlightSources,
+  onClearSourceHighlights,
+  onJumpToCitation,
+  pdfFile
+}: TraceLogProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
   const [selectedImageForOCR, setSelectedImageForOCR] = useState<{ data: string; entryId: string } | null>(null);
+  const [detectingSource, setDetectingSource] = useState<string | null>(null);
 
   const filteredExtractions = extractions.filter((entry) =>
     entry.fieldName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -136,6 +153,65 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll, onUpdate
     }
   };
 
+  const detectSourceForExtraction = async (entry: ExtractionEntry) => {
+    if (!pdfFile || !onUpdateExtraction) return;
+    
+    setDetectingSource(entry.id);
+    toast.info("Detecting source...");
+    
+    try {
+      const detection = await detectSourceCitations(
+        entry.text,
+        pdfFile,
+        entry.page
+      );
+      
+      if (detection.sourceCitations.length > 0) {
+        onUpdateExtraction(entry.id, {
+          sourceCitations: detection.sourceCitations
+        });
+        toast.success(`Found ${detection.sourceCitations.length} source${detection.sourceCitations.length > 1 ? 's' : ''} (${(detection.confidence * 100).toFixed(0)}% confidence)`);
+      } else {
+        toast.error("No source found");
+      }
+    } catch (error) {
+      console.error("Error detecting source:", error);
+      toast.error("Failed to detect source");
+    } finally {
+      setDetectingSource(null);
+    }
+  };
+
+  const detectAllSources = async () => {
+    if (!pdfFile || !onUpdateExtraction) return;
+    
+    toast.info("Detecting sources for all extractions...");
+    let detected = 0;
+    
+    for (const extraction of extractions) {
+      if (!extraction.sourceCitations || extraction.sourceCitations.length === 0) {
+        try {
+          const detection = await detectSourceCitations(
+            extraction.text,
+            pdfFile,
+            extraction.page
+          );
+          
+          if (detection.sourceCitations.length > 0) {
+            onUpdateExtraction(extraction.id, {
+              sourceCitations: detection.sourceCitations
+            });
+            detected++;
+          }
+        } catch (error) {
+          console.error(`Error detecting source for ${extraction.id}:`, error);
+        }
+      }
+    }
+    
+    toast.success(`Detected sources for ${detected} extraction${detected !== 1 ? 's' : ''}`);
+  };
+
   const getMethodColor = (method: string) => {
     switch (method) {
       case "manual":
@@ -200,7 +276,7 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll, onUpdate
         </Card>
 
         {/* Stats */}
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-sm mb-2">
           <div>
             <span className="text-muted-foreground">Total:</span>{" "}
             <span className="font-semibold">{extractions.length}</span>
@@ -210,6 +286,19 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll, onUpdate
             <span className="font-semibold">{new Set(extractions.map((e) => e.page)).size}</span>
           </div>
         </div>
+
+        {/* Batch detection button */}
+        {pdfFile && extractions.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={detectAllSources}
+            className="w-full gap-2 text-xs"
+          >
+            <MapPin className="h-3 w-3" />
+            Auto-Detect All Sources
+          </Button>
+        )}
 
         {extractions.length > 0 && (
           <Button
@@ -240,9 +329,69 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll, onUpdate
                 entry.method
               )}`}
               onClick={() => onJumpToExtraction(entry)}
+              onMouseEnter={() => onHighlightSources?.(entry.sourceCitations)}
+              onMouseLeave={() => onClearSourceHighlights?.()}
             >
               <div className="flex items-start justify-between mb-2">
-                <div className="font-medium text-sm">{entry.fieldName}</div>
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="font-medium text-sm">{entry.fieldName}</div>
+                  
+                  {/* Citation indicator */}
+                  {entry.sourceCitations && entry.sourceCitations.length > 0 && (
+                    <HoverCard>
+                      <HoverCardTrigger asChild>
+                        <div className="flex items-center gap-1 text-xs text-primary cursor-help">
+                          <Link2 className="h-3 w-3" />
+                          <span>{entry.sourceCitations.length}</span>
+                        </div>
+                      </HoverCardTrigger>
+                      <HoverCardContent className="w-96" side="left">
+                        <div className="space-y-3">
+                          <div className="font-semibold text-sm flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            Source Citations
+                          </div>
+                          
+                          {entry.sourceCitations.map((citation, idx) => (
+                            <div
+                              key={citation.id}
+                              className="border-l-2 border-primary/30 pl-3 py-2 hover:bg-muted/50 rounded cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onJumpToCitation?.(citation);
+                              }}
+                            >
+                              <div className="flex items-start justify-between mb-1">
+                                <span className="text-xs font-medium text-primary">
+                                  Source {idx + 1} • Page {citation.page}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {(citation.confidence * 100).toFixed(0)}% match
+                                </span>
+                              </div>
+                              
+                              <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                                {citation.context}
+                              </p>
+                              
+                              <div className="text-xs bg-primary/5 p-2 rounded border border-primary/10">
+                                "{citation.sourceText}"
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  )}
+                  
+                  {/* Confidence badge */}
+                  {entry.sourceCitations?.[0]?.confidence && entry.sourceCitations[0].confidence > 0.8 && (
+                    <div title="High confidence source match">
+                      <CheckCircle className="h-3 w-3 text-green-600" />
+                    </div>
+                  )}
+                </div>
+                
                 <div className="flex items-center gap-2">
                   {entry.method === "image" && entry.imageData && (
                     <>
@@ -305,10 +454,34 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll, onUpdate
                 </div>
               )}
               
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
+              {/* Show primary source context if available */}
+              {entry.sourceCitations?.[0] && (
+                <div className="text-xs text-primary/70 italic border-l-2 border-primary/20 pl-2 mt-2">
+                  From: "{entry.sourceCitations[0].context.substring(0, 80)}..."
+                </div>
+              )}
+              
+              <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
                 <span>Page {entry.page}</span>
                 <span>{entry.timestamp.toLocaleTimeString()}</span>
               </div>
+
+              {/* Find Source button if no citations */}
+              {!entry.sourceCitations && pdfFile && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-2 text-xs gap-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    detectSourceForExtraction(entry);
+                  }}
+                  disabled={detectingSource === entry.id}
+                >
+                  <MapPin className="h-3 w-3" />
+                  {detectingSource === entry.id ? "Detecting..." : "Find Source"}
+                </Button>
+              )}
             </Card>
           ))
         )}

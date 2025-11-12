@@ -15,6 +15,7 @@ import { AnnotationExportDialog } from "./AnnotationExportDialog";
 import { DrawingToolbar, type DrawingTool } from "./DrawingToolbar";
 import { HighlightToolbar } from "./HighlightToolbar";
 import { SearchPanel } from "./SearchPanel";
+import { CitationLinkPanel } from "./CitationLinkPanel";
 import { useAnnotationCanvas } from "@/hooks/useAnnotationCanvas";
 import { usePageAnnotations } from "@/hooks/usePageAnnotations";
 import { useCanvasHistory } from "@/hooks/useCanvasHistory";
@@ -22,6 +23,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useTextHighlights } from "@/hooks/useTextHighlights";
 import { TextHighlight } from "@/types/highlights";
 import { navigateToPosition } from "@/lib/pdfNavigation";
+import type { SourceCitation } from "@/lib/citationDetector";
 import * as pdfjsLib from "pdfjs-dist";
 import { extractTextWithCoordinates, findTextInRegion, pdfToScreenCoords } from "@/lib/textExtraction";
 
@@ -43,6 +45,8 @@ interface PDFViewerProps {
   extractions: ExtractionEntry[];
   onAnnotationsImport?: (annotations: PDFAnnotation[]) => void;
   onPdfTextExtracted?: (text: string) => void;
+  highlightedSources?: SourceCitation[];
+  onJumpToExtraction?: (extraction: ExtractionEntry) => void;
 }
 
 export const PDFViewer = ({
@@ -58,7 +62,9 @@ export const PDFViewer = ({
   onScaleChange,
   extractions,
   onAnnotationsImport,
-  onPdfTextExtracted
+  onPdfTextExtracted,
+  highlightedSources = [],
+  onJumpToExtraction
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
@@ -77,6 +83,7 @@ export const PDFViewer = ({
   const [pdfFullText, setPdfFullText] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [flashCoords, setFlashCoords] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [hoveredRegion, setHoveredRegion] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageCanvasRef = useRef<HTMLCanvasElement | null>(null);
   
@@ -334,9 +341,36 @@ export const PDFViewer = ({
 
     const pageHighlights = getHighlightsForPage(props.pageIndex + 1);
     const pageSearchResults = searchResults.filter(r => r.page === props.pageIndex + 1 && r.coordinates);
+    const pageSourceHighlights = highlightedSources.filter(s => s.page === props.pageIndex + 1);
 
     return (
       <div>
+        {/* Source Citation Highlights (highest priority) */}
+        {pageSourceHighlights.map((source) => {
+          const coords = source.coordinates;
+          
+          return (
+            <div
+              key={source.id}
+              className="animate-pulse"
+              style={{
+                position: 'absolute',
+                left: `${coords.x}px`,
+                top: `${coords.y}px`,
+                width: `${coords.width}px`,
+                height: `${coords.height}px`,
+                border: '3px solid hsl(var(--chart-3))',
+                backgroundColor: 'hsl(var(--chart-3) / 0.2)',
+                pointerEvents: 'auto',
+                zIndex: 100,
+              }}
+              onMouseEnter={() => setHoveredRegion(coords)}
+              onMouseLeave={() => setHoveredRegion(null)}
+              title={`Source: ${source.context}`}
+            />
+          );
+        })}
+
         {/* Text Highlights */}
         {pageHighlights.map((highlight) => {
           const coords = highlight.coordinates;
