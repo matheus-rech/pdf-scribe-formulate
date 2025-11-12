@@ -1,22 +1,22 @@
 project_id = "xbeitkcacabbrqcosyst"
 
 [functions.ai-table-vision]
-verify_jwt = false
+verify_jwt = true
 
 [functions.batch-extract-section]
-verify_jwt = false
+verify_jwt = true
 
 [functions.extract-picot]
-verify_jwt = false
+verify_jwt = true
 
 [functions.validate-extraction]
-verify_jwt = false
+verify_jwt = true
 
 [functions.extract-form-step]
-verify_jwt = false
+verify_jwt = true
 
 [functions.validate-citation]
-verify_jwt = false
+verify_jwt = true
 
 [functions.multi-model-extract]
-verify_jwt = false
+verify_jwt = true
