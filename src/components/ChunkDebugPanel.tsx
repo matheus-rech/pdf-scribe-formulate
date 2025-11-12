@@ -1,9 +1,12 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, FileText, BookOpen, FlaskConical, BarChart3, MessageSquare, CheckCircle, Quote, Paperclip } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
+import type { ExtractionEntry } from "@/pages/Index";
+import { calculateSectionCompletion, hasExtractionsInSection } from "@/lib/sectionProgress";
 
 interface Study {
   id: string;
@@ -17,8 +20,8 @@ interface Study {
     sections: Array<{
       name: string;
       type: string;
-      startPage: number;
-      endPage: number;
+      pageStart: number;
+      pageEnd: number;
       confidence: number;
       charStart: number;
       charEnd: number;
@@ -28,6 +31,7 @@ interface Study {
 
 interface ChunkDebugPanelProps {
   currentStudy: Study | null;
+  extractions?: ExtractionEntry[];
 }
 
 const getSectionIcon = (type: string) => {
@@ -57,7 +61,7 @@ const getSectionColor = (type: string) => {
   }
 };
 
-export const ChunkDebugPanel = ({ currentStudy }: ChunkDebugPanelProps) => {
+export const ChunkDebugPanel = ({ currentStudy, extractions = [] }: ChunkDebugPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
   if (!currentStudy?.pdf_chunks) {
@@ -65,6 +69,13 @@ export const ChunkDebugPanel = ({ currentStudy }: ChunkDebugPanelProps) => {
   }
 
   const chunks = currentStudy.pdf_chunks;
+  const totalCompletion = chunks.sections
+    ? Math.round(
+        chunks.sections.reduce((sum, section) => 
+          sum + calculateSectionCompletion(section as any, extractions), 0
+        ) / chunks.sections.length
+      )
+    : 0;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -72,12 +83,19 @@ export const ChunkDebugPanel = ({ currentStudy }: ChunkDebugPanelProps) => {
         <CollapsibleTrigger className="w-full">
           <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
             <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-sm">PDF Processing Debug</CardTitle>
                 <Badge variant="secondary" className="text-xs">
                   {chunks.sections?.length || 0} sections
                 </Badge>
               </div>
+              {totalCompletion > 0 && (
+                <Badge variant="outline" className="text-xs bg-primary/10">
+                  {totalCompletion}% extracted
+                </Badge>
+              )}
+            </div>
               <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </div>
             <CardDescription className="text-xs text-left">
@@ -121,6 +139,8 @@ export const ChunkDebugPanel = ({ currentStudy }: ChunkDebugPanelProps) => {
                   {chunks.sections.map((section, idx) => {
                     const Icon = getSectionIcon(section.type);
                     const colorClass = getSectionColor(section.type);
+                    const completion = calculateSectionCompletion(section as any, extractions);
+                    const hasData = hasExtractionsInSection(section as any, extractions);
                     
                     return (
                       <div
@@ -133,14 +153,24 @@ export const ChunkDebugPanel = ({ currentStudy }: ChunkDebugPanelProps) => {
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-xs truncate">{section.name}</div>
                               <div className="text-[10px] text-muted-foreground">
-                                Pages {section.startPage}-{section.endPage} • {Math.round(section.confidence * 100)}% confidence
+                                Pages {section.pageStart}-{section.pageEnd} • {Math.round(section.confidence * 100)}% confidence
                               </div>
                             </div>
                           </div>
-                          <Badge variant="outline" className={`text-[10px] flex-shrink-0 ${colorClass}`}>
-                            {section.type}
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className={`text-[10px] flex-shrink-0 ${colorClass}`}>
+                              {section.type}
+                            </Badge>
+                            {hasData && (
+                              <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary">
+                                {completion}%
+                              </Badge>
+                            )}
+                          </div>
                         </div>
+                        {hasData && (
+                          <Progress value={completion} className="h-1 mt-2" />
+                        )}
                         <div className="text-[10px] text-muted-foreground mt-1">
                           Chars: {section.charStart.toLocaleString()}-{section.charEnd.toLocaleString()}
                         </div>

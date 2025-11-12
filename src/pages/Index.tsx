@@ -13,6 +13,7 @@ import { useStudyStorage } from "@/hooks/use-study-storage";
 import { detectSourceCitations, type SourceCitation } from "@/lib/citationDetector";
 import { AuditReportDialog } from "@/components/AuditReportDialog";
 import { BatchRevalidationDialog } from "@/components/BatchRevalidationDialog";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface ExtractionEntry {
   id: string;
@@ -209,6 +210,67 @@ const Index = () => {
     setIsReprocessing(false);
   };
 
+  const [isBatchExtracting, setIsBatchExtracting] = useState(false);
+
+  const handleBatchExtract = async (section: any) => {
+    if (!currentStudy?.pdf_chunks?.pageChunks) {
+      toast.error("PDF chunks not available. Please re-process the PDF first.");
+      return;
+    }
+
+    setIsBatchExtracting(true);
+    try {
+      // Get text for this section
+      const pageChunks = currentStudy.pdf_chunks.pageChunks;
+      const fullText = pageChunks.map((c: any) => c.text).join('\n\n');
+      const sectionText = fullText.substring(section.charStart, section.charEnd);
+
+      toast.info(`Extracting data from ${section.name}...`);
+
+      const { data, error } = await supabase.functions.invoke('batch-extract-section', {
+        body: {
+          sectionText,
+          sectionType: section.type,
+          sectionName: section.name
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      const { extractedData, fieldsExtracted } = data;
+
+      // Create extraction entries for each extracted field
+      const timestamp = new Date();
+      let extractionCount = 0;
+
+      for (const [fieldName, fieldValue] of Object.entries(extractedData)) {
+        if (typeof fieldValue === 'string' && fieldValue.trim()) {
+          handleExtraction({
+            id: `batch-${section.type}-${fieldName}-${Date.now()}-${extractionCount}`,
+            fieldName,
+            text: fieldValue,
+            page: section.pageStart,
+            method: "ai",
+            timestamp
+          });
+          extractionCount++;
+        }
+      }
+
+      toast.success(`✨ Extracted ${fieldsExtracted} fields from ${section.name}`);
+    } catch (error: any) {
+      console.error("Batch extraction error:", error);
+      toast.error("Failed to extract data from section");
+    } finally {
+      setIsBatchExtracting(false);
+    }
+  };
+
   const handleAnnotationsImport = (annotations: PDFAnnotation[]) => {
     const FIELD_NAMES = [
       "citation", "doi", "pmid", "journal", "year",
@@ -319,7 +381,7 @@ const Index = () => {
               isReprocessing={isReprocessing}
             />
 
-            <ChunkDebugPanel currentStudy={currentStudy} />
+            <ChunkDebugPanel currentStudy={currentStudy} extractions={extractions} />
           </div>
         </div>
         <ExtractionForm
@@ -352,6 +414,8 @@ const Index = () => {
             highlightedSources={highlightedSources}
             onJumpToExtraction={handleJumpToExtraction}
             studySections={currentStudy?.pdf_chunks?.sections}
+            onBatchExtract={handleBatchExtract}
+            isBatchExtracting={isBatchExtracting}
           />
       </div>
 

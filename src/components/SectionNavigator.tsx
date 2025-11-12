@@ -1,21 +1,21 @@
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { FileText, BookOpen, FlaskConical, BarChart3, MessageSquare, CheckCircle, Quote, Paperclip } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { FileText, BookOpen, FlaskConical, BarChart3, MessageSquare, CheckCircle, Quote, Paperclip, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ExtractionEntry } from "@/pages/Index";
+import type { DetectedSection } from "@/lib/sectionDetection";
+import { calculateSectionCompletion } from "@/lib/sectionProgress";
 
-interface DetectedSection {
-  name: string;
-  type: string;
-  startPage: number;
-  endPage: number;
-  confidence: number;
-}
 
 interface SectionNavigatorProps {
   sections: DetectedSection[];
   currentPage: number;
   onPageChange: (page: number) => void;
+  extractions?: ExtractionEntry[];
+  onBatchExtract?: (section: DetectedSection) => void;
+  isBatchExtracting?: boolean;
 }
 
 const getSectionIcon = (type: string) => {
@@ -51,14 +51,21 @@ const getSectionColor = (type: string, isActive: boolean) => {
   return `${base} bg-muted text-muted-foreground hover:bg-muted/80`;
 };
 
-export const SectionNavigator = ({ sections, currentPage, onPageChange }: SectionNavigatorProps) => {
+export const SectionNavigator = ({ 
+  sections, 
+  currentPage, 
+  onPageChange,
+  extractions = [],
+  onBatchExtract,
+  isBatchExtracting = false
+}: SectionNavigatorProps) => {
   if (!sections || sections.length === 0) {
     return null;
   }
 
   // Find active section based on current page
   const activeSection = sections.find(
-    section => currentPage >= section.startPage && currentPage <= section.endPage
+    section => currentPage >= section.pageStart && currentPage <= section.pageEnd
   );
 
   return (
@@ -73,32 +80,70 @@ export const SectionNavigator = ({ sections, currentPage, onPageChange }: Sectio
               const Icon = getSectionIcon(section.type);
               const isActive = activeSection?.name === section.name;
               const colorClass = getSectionColor(section.type, isActive);
+              const completion = calculateSectionCompletion(section, extractions);
+              const hasData = completion > 0;
               
               return (
-                <Button
-                  key={idx}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onPageChange(section.startPage)}
-                  className={cn(
-                    "gap-1.5 text-xs h-8 whitespace-nowrap",
-                    colorClass,
-                    isActive && "ring-2 ring-offset-1"
-                  )}
-                  title={`${section.name} (Pages ${section.startPage}-${section.endPage})`}
-                >
-                  <Icon className="h-3 w-3" />
-                  <span className="hidden sm:inline">{section.name}</span>
-                  <Badge 
-                    variant="secondary" 
-                    className={cn(
-                      "text-[10px] h-4 px-1 ml-1",
-                      isActive ? "bg-white/20 text-white" : ""
+                <div key={idx} className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onPageChange(section.pageStart)}
+                      className={cn(
+                        "gap-1.5 text-xs h-8 whitespace-nowrap",
+                        colorClass,
+                        isActive && "ring-2 ring-offset-1"
+                      )}
+                      title={`${section.name} (Pages ${section.pageStart}-${section.pageEnd}) - ${completion}% complete`}
+                    >
+                      <Icon className="h-3 w-3" />
+                      <span className="hidden sm:inline">{section.name}</span>
+                      <Badge 
+                        variant="secondary" 
+                        className={cn(
+                          "text-[10px] h-4 px-1 ml-1",
+                          isActive ? "bg-white/20 text-white" : ""
+                        )}
+                      >
+                        {section.pageStart}-{section.pageEnd}
+                      </Badge>
+                    </Button>
+                    
+                    {onBatchExtract && section.type !== 'unknown' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onBatchExtract(section);
+                        }}
+                        disabled={isBatchExtracting}
+                        className="h-8 w-8 p-0 hover:bg-primary/10"
+                        title={`AI Extract all fields from ${section.name}`}
+                      >
+                        <Sparkles className={cn(
+                          "h-3.5 w-3.5",
+                          isBatchExtracting ? "animate-pulse" : "",
+                          hasData ? "text-primary" : "text-muted-foreground"
+                        )} />
+                      </Button>
                     )}
-                  >
-                    {section.startPage}-{section.endPage}
-                  </Badge>
-                </Button>
+                  </div>
+                  
+                  {/* Progress bar */}
+                  {completion > 0 && (
+                    <div className="flex items-center gap-1 px-1">
+                      <Progress 
+                        value={completion} 
+                        className="h-1 w-20"
+                      />
+                      <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                        {completion}%
+                      </span>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

@@ -48,13 +48,9 @@ interface PDFViewerProps {
   onPdfTextExtracted?: (text: string) => void;
   highlightedSources?: SourceCitation[];
   onJumpToExtraction?: (extraction: ExtractionEntry) => void;
-  studySections?: Array<{
-    name: string;
-    type: string;
-    startPage: number;
-    endPage: number;
-    confidence: number;
-  }>;
+  studySections?: any[];
+  onBatchExtract?: (section: any) => void;
+  isBatchExtracting?: boolean;
 }
 
 export const PDFViewer = ({
@@ -73,7 +69,9 @@ export const PDFViewer = ({
   onPdfTextExtracted,
   highlightedSources = [],
   onJumpToExtraction,
-  studySections
+  studySections,
+  onBatchExtract,
+  isBatchExtracting = false
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
@@ -1055,6 +1053,9 @@ export const PDFViewer = ({
           sections={studySections}
           currentPage={currentPage}
           onPageChange={onPageChange}
+          extractions={extractions}
+          onBatchExtract={onBatchExtract}
+          isBatchExtracting={isBatchExtracting}
         />
       )}
 
