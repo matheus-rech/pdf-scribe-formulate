@@ -14,6 +14,7 @@ const Auth = () => {
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [phoneSent, setPhoneSent] = useState(false);
@@ -110,8 +111,52 @@ const Auth = () => {
         setPhoneSent(true);
         toast({
           title: "Check your messages",
-          description: "We sent you a code via SMS",
+          description: "We sent you a 6-digit code via SMS",
         });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!otp.trim() || otp.length !== 6) {
+      toast({
+        title: "Invalid code",
+        description: "Please enter the 6-digit code",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.verifyOtp({
+        phone: phone.trim(),
+        token: otp.trim(),
+        type: 'sms',
+      });
+
+      if (error) {
+        toast({
+          title: "Verification failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "You're now signed in",
+        });
+        navigate("/");
       }
     } catch (error) {
       toast({
@@ -190,30 +235,50 @@ const Auth = () => {
             
             <TabsContent value="phone" className="mt-4">
               {phoneSent ? (
-                <div className="text-center space-y-4">
-                  <div className="p-4 rounded-full bg-primary/10 w-16 h-16 mx-auto flex items-center justify-center">
-                    <Phone className="h-8 w-8 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-2">Check your messages</h3>
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="text-center mb-4">
+                    <div className="p-4 rounded-full bg-primary/10 w-16 h-16 mx-auto flex items-center justify-center mb-3">
+                      <Phone className="h-8 w-8 text-primary" />
+                    </div>
+                    <h3 className="font-semibold mb-2">Enter verification code</h3>
                     <p className="text-sm text-muted-foreground">
-                      We sent a code to <strong>{phone}</strong>
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Enter the code to sign in
+                      We sent a 6-digit code to <strong>{phone}</strong>
                     </p>
                   </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="otp">Verification Code</Label>
+                    <Input
+                      id="otp"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      disabled={loading}
+                      autoFocus
+                      className="text-center text-2xl tracking-widest"
+                    />
+                  </div>
+                  
+                  <Button type="submit" className="w-full" disabled={loading || otp.length !== 6}>
+                    {loading ? "Verifying..." : "Verify & Sign In"}
+                  </Button>
+                  
                   <Button
+                    type="button"
                     variant="outline"
                     onClick={() => {
                       setPhoneSent(false);
-                      setPhone("");
+                      setOtp("");
                     }}
                     className="w-full"
                   >
                     Use a different number
                   </Button>
-                </div>
+                </form>
               ) : (
                 <form onSubmit={handlePhoneAuth} className="space-y-4">
                   <div className="space-y-2">
