@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { ExtractionForm } from "@/components/ExtractionForm";
 import { PDFViewer } from "@/components/PDFViewer";
 import { TraceLog } from "@/components/TraceLog";
@@ -6,8 +7,7 @@ import { StudyManager } from "@/components/StudyManager";
 import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
 import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
 import { toast } from "sonner";
-import { FileText, User } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { FileText, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStudyStorage } from "@/hooks/use-study-storage";
 import { detectSourceCitations, type SourceCitation } from "@/lib/citationDetector";
@@ -15,6 +15,7 @@ import { AuditReportDialog } from "@/components/AuditReportDialog";
 import { BatchRevalidationDialog } from "@/components/BatchRevalidationDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { supabase } from "@/integrations/supabase/client";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 export interface ExtractionEntry {
   id: string;
@@ -32,8 +33,9 @@ export interface ExtractionEntry {
 }
 
 const Index = () => {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [email, setEmail] = useState<string>("");
-  const [emailSet, setEmailSet] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
@@ -59,12 +61,35 @@ const Index = () => {
 
   const [isReprocessing, setIsReprocessing] = useState(false);
 
-  // Load all studies when email is set
+  // Check authentication
   useEffect(() => {
-    if (emailSet) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setUser(session.user);
+        setEmail(session.user.email || session.user.user_metadata?.email || "");
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setUser(session.user);
+        setEmail(session.user.email || session.user.user_metadata?.email || "");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  // Load all studies when user is authenticated
+  useEffect(() => {
+    if (user && email) {
       getAllStudies().then(setStudies);
     }
-  }, [emailSet]);
+  }, [user, email]);
 
   // Load extractions when study is selected
   useEffect(() => {
@@ -96,13 +121,9 @@ const Index = () => {
     }
   };
 
-  const handleSetEmail = () => {
-    if (email.trim()) {
-      setEmailSet(true);
-      toast.success("Email set - ready to add studies");
-    } else {
-      toast.error("Please enter an email");
-    }
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
   };
 
   const handleStudySelect = async (studyId: string) => {
@@ -311,37 +332,8 @@ const Index = () => {
     }
   };
 
-  // Show email prompt if not set
-  if (!emailSet) {
-    return (
-      <div className="flex h-screen bg-background items-center justify-center">
-        <div className="max-w-md w-full p-8 bg-card border border-border rounded-lg shadow-lg">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 rounded-lg bg-primary/10">
-              <User className="h-8 w-8 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Clinical Study Extractor</h1>
-              <p className="text-sm text-muted-foreground">Enter your email to continue</p>
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            <Input
-              type="email"
-              placeholder="your.email@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSetEmail()}
-              autoFocus
-            />
-            <Button onClick={handleSetEmail} className="w-full">
-              Continue
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
+  if (!user) {
+    return null; // Will redirect to auth
   }
 
   return (
@@ -360,9 +352,20 @@ const Index = () => {
           </div>
           
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <User className="h-3 w-3" />
-              {email}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <User className="h-3 w-3" />
+                {email}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSignOut}
+                className="h-7 px-2 text-xs"
+              >
+                <LogOut className="h-3 w-3 mr-1" />
+                Sign Out
+              </Button>
             </div>
             
             <input
