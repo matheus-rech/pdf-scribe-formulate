@@ -17,6 +17,10 @@ import { ExtractButton } from "./ExtractButton";
 import { ExtractionPreview } from "./ExtractionPreview";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { ConflictResolutionDashboard } from "./ConflictResolutionDashboard";
+import { ReviewerSettingsDialog } from "./ReviewerSettingsDialog";
+import { ExtractionMethodInfo } from "./ExtractionMethodInfo";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Settings2, Info } from "lucide-react";
 
 interface ExtractionFormProps {
   activeField: string | null;
@@ -115,6 +119,8 @@ export const ExtractionForm = ({
   } | null>(null);
   const [showConflictDashboard, setShowConflictDashboard] = useState(false);
   const [multiModelResults, setMultiModelResults] = useState<any>(null);
+  const [showReviewerSettings, setShowReviewerSettings] = useState(false);
+  const [showMethodInfo, setShowMethodInfo] = useState(false);
   
   // Validation state
   const [validationResults, setValidationResults] = useState<Record<string, {
@@ -1046,21 +1052,89 @@ export const ExtractionForm = ({
             <div className="flex items-center gap-2">
               {currentStep !== 2 && ( // Step 2 (PICO-T) has its own extraction button
                 <>
-                  <ExtractButton
-                    onClick={() => handleExtractStep(currentStep)}
-                    isLoading={isExtractingStep[currentStep] || false}
-                    disabled={!pdfLoaded || isExtractingAll || isExtractingMultiModel}
-                    size="sm"
-                  />
-                  <ExtractButton
-                    onClick={() => handleMultiModelExtract(currentStep)}
-                    isLoading={isExtractingMultiModel}
-                    disabled={!pdfLoaded || isExtractingAll || isExtractingStep[currentStep]}
-                    variant="default"
-                    size="sm"
-                  >
-                    Multi-AI Review
-                  </ExtractButton>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <ExtractButton
+                            onClick={() => handleExtractStep(currentStep)}
+                            isLoading={isExtractingStep[currentStep] || false}
+                            disabled={!pdfLoaded || isExtractingAll || isExtractingMultiModel}
+                            size="sm"
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs">
+                        <p className="font-medium mb-1">Single AI Extraction</p>
+                        <p className="text-xs text-muted-foreground">
+                          Quick extraction using Gemini Flash. Faster and uses fewer credits. 
+                          Best for straightforward data extraction.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <ExtractButton
+                            onClick={() => handleMultiModelExtract(currentStep)}
+                            isLoading={isExtractingMultiModel}
+                            disabled={!pdfLoaded || isExtractingAll || isExtractingStep[currentStep]}
+                            variant="default"
+                            size="sm"
+                          >
+                            Multi-AI Review
+                          </ExtractButton>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs">
+                        <p className="font-medium mb-1">Multi-AI Review (8 Models)</p>
+                        <p className="text-xs text-muted-foreground">
+                          Advanced extraction using 8 specialized AI models working in parallel. 
+                          Provides consensus-based results with conflict detection. 
+                          More accurate but uses more credits and takes longer (~20-30s).
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => setShowMethodInfo(true)}
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9"
+                        >
+                          <Info className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Compare extraction methods</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => setShowReviewerSettings(true)}
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9"
+                        >
+                          <Settings2 className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Configure AI reviewers</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </>
               )}
               {currentStep === 1 && (
@@ -2140,15 +2214,24 @@ export const ExtractionForm = ({
         />
       )}
 
-      {/* Conflict Resolution Dashboard Dialog */}
-      <Dialog open={showConflictDashboard} onOpenChange={setShowConflictDashboard}>
-        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>AI Review Conflict Resolution</DialogTitle>
-          </DialogHeader>
-          <ConflictResolutionDashboard />
-        </DialogContent>
-      </Dialog>
+      {/* Conflict Resolution Dashboard */}
+      <ConflictResolutionDashboard
+        open={showConflictDashboard}
+        onOpenChange={setShowConflictDashboard}
+        studyId={studyId || ''}
+      />
+
+      {/* Reviewer Settings Dialog */}
+      <ReviewerSettingsDialog
+        open={showReviewerSettings}
+        onOpenChange={setShowReviewerSettings}
+      />
+
+      {/* Extraction Method Info Dialog */}
+      <ExtractionMethodInfo
+        open={showMethodInfo}
+        onOpenChange={setShowMethodInfo}
+      />
     </div>
   );
 };

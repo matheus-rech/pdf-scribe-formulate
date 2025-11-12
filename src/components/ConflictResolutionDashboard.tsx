@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { AlertTriangle, CheckCircle, Clock, FileText, User } from "lucide-react";
 import { AIReviewComparison } from "./AIReviewComparison";
@@ -24,7 +25,13 @@ interface ConflictItem {
   created_at: string;
 }
 
-export const ConflictResolutionDashboard = () => {
+interface ConflictResolutionDashboardProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  studyId?: string;
+}
+
+export const ConflictResolutionDashboard = ({ open, onOpenChange }: ConflictResolutionDashboardProps) => {
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [selectedConflict, setSelectedConflict] = useState<ConflictItem | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -138,17 +145,22 @@ export const ConflictResolutionDashboard = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-orange-500" />
-            Conflict Resolution Dashboard
-          </CardTitle>
-          <CardDescription>
-            Review and resolve extraction conflicts flagged by AI reviewers
-          </CardDescription>
-        </CardHeader>
+            AI Review Conflict Resolution
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardDescription>
+                Review and resolve extraction conflicts flagged by AI reviewers
+              </CardDescription>
+            </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-3">
@@ -323,5 +335,7 @@ export const ConflictResolutionDashboard = () => {
         </CardContent>
       </Card>
     </div>
+      </DialogContent>
+    </Dialog>
   );
 };
