@@ -14,8 +14,13 @@ serve(async (req) => {
 
   try {
     const { stepNumber, pdfText, studyId, extractionId } = await req.json();
+    
+    // Generate a valid UUID for extraction_id if not provided or if invalid format
+    const validExtractionId = extractionId && extractionId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) 
+      ? extractionId 
+      : crypto.randomUUID();
 
-    console.log(`Multi-model extraction started for step ${stepNumber}`);
+    console.log(`Multi-model extraction started for step ${stepNumber} with extraction ID: ${validExtractionId}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -78,7 +83,7 @@ serve(async (req) => {
         const { data: reviewData, error: reviewInsertError } = await supabase
           .from('ai_reviews')
           .insert({
-            extraction_id: extractionId,
+            extraction_id: validExtractionId,
             reviewer_config_id: reviewer.id,
             field_name: `step_${stepNumber}_full`,
             extracted_value: JSON.stringify(extraction.data),
@@ -135,7 +140,7 @@ serve(async (req) => {
       await supabase
         .from('extraction_consensus')
         .upsert({
-          extraction_id: extractionId,
+          extraction_id: validExtractionId,
           field_name: fieldName,
           consensus_value: consensusValue.value,
           agreement_level: consensusValue.agreementLevel,
@@ -183,51 +188,59 @@ ${text.substring(0, 8000)}
 
 Extract all available data. For any field you cannot find, use null. Provide your overall confidence (0-100) and reasoning.`;
 
+  // Build request body - only include temperature for Google models
+  const requestBody: any = {
+    model: reviewer.model,
+    messages: [
+      { role: 'system', content: reviewer.system_prompt },
+      { role: 'user', content: prompt }
+    ],
+    tools: [{
+      type: "function",
+      function: {
+        name: "extract_clinical_data",
+        description: "Extract structured clinical study data",
+        parameters: {
+          type: "object",
+          properties: {
+            data: {
+              type: "object",
+              description: "Extracted field values",
+              properties: schema
+            },
+            confidence: {
+              type: "number",
+              description: "Overall confidence score 0-100"
+            },
+            reasoning: {
+              type: "string",
+              description: "Explanation of confidence level and extraction decisions"
+            },
+            sourceText: {
+              type: "string",
+              description: "Relevant excerpt supporting the extraction"
+            }
+          },
+          required: ["data", "confidence", "reasoning"]
+        }
+      }
+    }],
+    tool_choice: { type: "function", function: { name: "extract_clinical_data" } }
+  };
+
+  // Only add temperature for Google models (OpenAI models only support default temperature)
+  const modelString = String(reviewer.model);
+  if (modelString.startsWith('google/')) {
+    requestBody.temperature = reviewer.temperature;
+  }
+
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: reviewer.model,
-      temperature: reviewer.temperature,
-      messages: [
-        { role: 'system', content: reviewer.system_prompt },
-        { role: 'user', content: prompt }
-      ],
-      tools: [{
-        type: "function",
-        function: {
-          name: "extract_clinical_data",
-          description: "Extract structured clinical study data",
-          parameters: {
-            type: "object",
-            properties: {
-              data: {
-                type: "object",
-                description: "Extracted field values",
-                properties: schema
-              },
-              confidence: {
-                type: "number",
-                description: "Overall confidence score 0-100"
-              },
-              reasoning: {
-                type: "string",
-                description: "Explanation of confidence level and extraction decisions"
-              },
-              sourceText: {
-                type: "string",
-                description: "Relevant excerpt supporting the extraction"
-              }
-            },
-            required: ["data", "confidence", "reasoning"]
-          }
-        }
-      }],
-      tool_choice: { type: "function", function: { name: "extract_clinical_data" } }
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
