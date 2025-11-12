@@ -18,6 +18,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [phoneSent, setPhoneSent] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -36,6 +37,13 @@ const Auth = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendTimer]);
 
 
   const handleMagicLink = async (e: React.FormEvent) => {
@@ -109,6 +117,7 @@ const Auth = () => {
         });
       } else {
         setPhoneSent(true);
+        setResendTimer(60);
         toast({
           title: "Check your messages",
           description: "We sent you a 6-digit code via SMS",
@@ -167,6 +176,11 @@ const Auth = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleResendCode = async () => {
+    setOtp("");
+    await handlePhoneAuth({ preventDefault: () => {} } as React.FormEvent);
   };
 
   return (
@@ -267,17 +281,29 @@ const Auth = () => {
                     {loading ? "Verifying..." : "Verify & Sign In"}
                   </Button>
                   
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setPhoneSent(false);
-                      setOtp("");
-                    }}
-                    className="w-full"
-                  >
-                    Use a different number
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleResendCode}
+                      disabled={loading || resendTimer > 0}
+                      className="flex-1"
+                    >
+                      {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend code"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setPhoneSent(false);
+                        setOtp("");
+                        setResendTimer(0);
+                      }}
+                      className="flex-1"
+                    >
+                      Different number
+                    </Button>
+                  </div>
                 </form>
               ) : (
                 <form onSubmit={handlePhoneAuth} className="space-y-4">
