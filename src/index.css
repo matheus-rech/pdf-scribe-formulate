@@ -186,4 +186,39 @@ All colors MUST be HSL.
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-muted-foreground/50;
   }
+
+  /* React-PDF-Viewer custom styles */
+  .rpv-core__viewer {
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  .rpv-core__page-layer {
+    position: relative;
+  }
+
+  .rpv-core__text-layer {
+    user-select: text !important;
+  }
+
+  .rpv-highlight__area {
+    z-index: 1;
+  }
+
+  .extraction-highlight {
+    transition: all 0.2s ease;
+    z-index: 2;
+  }
+
+  .extraction-highlight:hover {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+
+  .pdf-viewer-container {
+    position: relative;
+    max-width: 100%;
+    margin: 0 auto;
+  }
 }

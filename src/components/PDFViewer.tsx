@@ -4,15 +4,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Upload, ChevronLeft, ChevronRight, Box, Camera, FileText, Search as SearchIcon, FileDown } from "lucide-react";
 import { toast } from "sonner";
-import * as pdfjsLib from "pdfjs-dist";
+import { Viewer, Worker } from '@react-pdf-viewer/core';
+import { highlightPlugin, Trigger } from '@react-pdf-viewer/highlight';
+import { searchPlugin } from '@react-pdf-viewer/search';
+import type { RenderHighlightContentProps, RenderHighlightsProps } from '@react-pdf-viewer/highlight';
 import type { ExtractionEntry } from "@/pages/Index";
-import { SearchPanel } from "./SearchPanel";
 import { extractAnnotationsFromPDF, type PDFAnnotation } from "@/lib/annotationParser";
 import { AnnotationImportDialog } from "./AnnotationImportDialog";
-import { ExtractionMarker } from "./ExtractionMarker";
+import * as pdfjsLib from "pdfjs-dist";
 
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import '@react-pdf-viewer/core/lib/styles/index.css';
+import '@react-pdf-viewer/highlight/lib/styles/index.css';
+import '@react-pdf-viewer/search/lib/styles/index.css';
 
 interface PDFViewerProps {
   file: File | null;
@@ -46,36 +49,29 @@ export const PDFViewer = ({
   onPdfTextExtracted
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const textLayerRef = useRef<HTMLDivElement>(null);
-  const [pdfDocument, setPdfDocument] = useState<any>(null);
+  const [fileUrl, setFileUrl] = useState<string>("");
   const [regionMode, setRegionMode] = useState(false);
   const [imageMode, setImageMode] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchResults, setSearchResults] = useState<Array<{ page: number; text: string; index: number }>>([]);
-  const [pdfText, setPdfText] = useState("");
   const [annotationDialogOpen, setAnnotationDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [isLoadingAnnotations, setIsLoadingAnnotations] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pageCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Load PDF when file changes
+  // Extract text from PDF when file loads
   useEffect(() => {
     if (!file) return;
 
-    const loadPDF = async () => {
+    const extractText = async () => {
       try {
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
-        setPdfDocument(pdf);
-        onTotalPagesChange(pdf.numPages);
-        onPageChange(1);
         
-        // Extract all text from PDF for AI analysis
         let fullText = "";
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
@@ -87,92 +83,112 @@ export const PDFViewer = ({
         if (onPdfTextExtracted) {
           onPdfTextExtracted(fullText);
         }
-        
-        toast.success(`PDF loaded: ${pdf.numPages} pages`);
       } catch (error) {
-        console.error("Error loading PDF:", error);
-        toast.error("Failed to load PDF");
+        console.error("Error extracting text:", error);
       }
     };
 
-    loadPDF();
+    extractText();
+  }, [file, onPdfTextExtracted]);
+
+  // Create object URL for the PDF file
+  useEffect(() => {
+    if (!file) {
+      setFileUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    setFileUrl(url);
+
+    return () => {
+      URL.revokeObjectURL(url);
+    };
   }, [file]);
 
-  // Render current page
-  useEffect(() => {
-    if (!pdfDocument || !canvasRef.current) return;
+  // Highlight plugin configuration
+  const renderHighlightContent = (props: RenderHighlightContentProps) => {
+    return <></>;
+  };
 
-    const renderPage = async () => {
-      try {
-        const page = await pdfDocument.getPage(currentPage);
-        const canvas = canvasRef.current!;
-        const context = canvas.getContext("2d")!;
+  const renderHighlights = (props: RenderHighlightsProps) => {
+    const pageExtractions = extractions.filter(
+      ext => ext.page === props.pageIndex + 1 && ext.coordinates
+    );
 
-        const viewport = page.getViewport({ scale });
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
+    return (
+      <div>
+        {pageExtractions.map((extraction) => {
+          const coords = extraction.coordinates;
+          if (!coords) return null;
 
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport,
-        };
+          // Use absolute positioning with pixels
+          const left = coords.x;
+          const top = coords.y;
+          const width = coords.width;
+          const height = coords.height;
 
-        await page.render(renderContext).promise;
+          let borderColor = "hsl(var(--extraction-manual))";
+          let bgColor = "hsl(var(--extraction-manual) / 0.1)";
 
-        // Render text layer for selection
-        if (textLayerRef.current) {
-          textLayerRef.current.innerHTML = "";
-          const textContent = await page.getTextContent();
-          
-          // Store text for search
-          const pageText = textContent.items.map((item: any) => item.str).join(" ");
-          setPdfText(prev => prev + "\n" + pageText);
-          
-          // Create text layer div
-          const textLayerDiv = textLayerRef.current;
-          textLayerDiv.style.width = `${viewport.width}px`;
-          textLayerDiv.style.height = `${viewport.height}px`;
+          if (extraction.method === "ai") {
+            borderColor = "hsl(var(--extraction-ai))";
+            bgColor = "hsl(var(--extraction-ai) / 0.1)";
+          } else if (extraction.method === "image") {
+            borderColor = "hsl(var(--extraction-image))";
+            bgColor = "hsl(var(--extraction-image) / 0.1)";
+          }
 
-          // Render text items
-          textContent.items.forEach((item: any) => {
-            const tx = pdfjsLib.Util.transform(
-              viewport.transform,
-              item.transform
-            );
-            
-            const span = document.createElement("span");
-            span.textContent = item.str;
-            span.style.position = "absolute";
-            span.style.left = `${tx[4]}px`;
-            span.style.top = `${tx[5]}px`;
-            span.style.fontSize = `${Math.abs(tx[0])}px`;
-            span.style.fontFamily = item.fontName;
-            span.className = "pdf-text-item";
-            
-            textLayerDiv.appendChild(span);
-          });
-        }
-      } catch (error) {
-        console.error("Error rendering page:", error);
-      }
-    };
+          return (
+            <div
+              key={extraction.id}
+              className="extraction-highlight"
+              style={{
+                position: 'absolute',
+                left: `${left}px`,
+                top: `${top}px`,
+                width: `${width}px`,
+                height: `${height}px`,
+                border: `2px solid ${borderColor}`,
+                backgroundColor: bgColor,
+                cursor: 'pointer',
+                pointerEvents: 'auto',
+              }}
+              onClick={() => {
+                toast.info(`Extraction: ${extraction.fieldName}`, {
+                  description: extraction.text
+                });
+              }}
+              title={`${extraction.fieldName}: ${extraction.text}`}
+            />
+          );
+        })}
+      </div>
+    );
+  };
 
-    renderPage();
-  }, [pdfDocument, currentPage, scale]);
+  const highlightPluginInstance = highlightPlugin({
+    renderHighlightContent,
+    renderHighlights,
+    trigger: Trigger.None,
+  });
 
-  // Handle text selection
-  useEffect(() => {
-    if (!textLayerRef.current || !activeField) return;
+  const searchPluginInstance = searchPlugin();
+  const { ShowSearchPopover } = searchPluginInstance;
 
-    const handleSelection = () => {
-      const selection = window.getSelection();
-      const selectedText = selection?.toString().trim();
+  // Handle text selection from the PDF
+  const handleTextSelection = () => {
+    if (!activeField || regionMode || imageMode) return;
 
-      if (selectedText && selectedText.length > 0) {
-        const range = selection!.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        const containerRect = containerRef.current!.getBoundingClientRect();
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim();
 
+    if (selectedText && selectedText.length > 0) {
+      const range = selection!.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const containerRect = containerRef.current?.getBoundingClientRect();
+
+      if (containerRect) {
         onExtraction({
           id: `extraction-${Date.now()}`,
           fieldName: activeField,
@@ -191,32 +207,34 @@ export const PDFViewer = ({
         toast.success(`Extracted to ${activeField}`);
         selection!.removeAllRanges();
       }
-    };
+    }
+  };
 
-    const textLayer = textLayerRef.current;
-    textLayer.addEventListener("mouseup", handleSelection);
+  // Handle region/image selection
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!regionMode && !imageMode) return;
+    if (!activeField) {
+      toast.error("Please select a field first");
+      return;
+    }
 
-    return () => {
-      textLayer.removeEventListener("mouseup", handleSelection);
-    };
-  }, [activeField, currentPage, onExtraction]);
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
 
-  // Handle region selection
-  const handleRegionMouseDown = (e: React.MouseEvent) => {
-    if (!regionMode || !containerRef.current) return;
-
-    const rect = containerRef.current.getBoundingClientRect();
     setIsSelecting(true);
     setSelectionStart({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     });
+    setSelectionBox(null);
   };
 
-  const handleRegionMouseMove = (e: React.MouseEvent) => {
-    if (!isSelecting || !selectionStart || !containerRef.current) return;
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isSelecting || !selectionStart) return;
 
-    const rect = containerRef.current.getBoundingClientRect();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
     const currentX = e.clientX - rect.left;
     const currentY = e.clientY - rect.top;
 
@@ -228,38 +246,40 @@ export const PDFViewer = ({
     });
   };
 
-  const handleRegionMouseUp = async () => {
-    if (!isSelecting || !selectionBox || !activeField || !canvasRef.current) return;
+  const handleMouseUp = async () => {
+    if (!isSelecting || !selectionBox || !activeField) {
+      setIsSelecting(false);
+      setSelectionStart(null);
+      setSelectionBox(null);
+      return;
+    }
 
     let extractedText = `[Region: ${selectionBox.width.toFixed(0)}x${selectionBox.height.toFixed(0)}px]`;
     let imageData: string | undefined = undefined;
 
-    // If in image mode, capture the actual image
-    if (imageMode) {
+    // Capture image if in image mode
+    if (imageMode && pageCanvasRef.current) {
       try {
-        const canvas = canvasRef.current;
+        const canvas = pageCanvasRef.current;
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
         
-        if (tempCtx) {
-          // Set canvas size to selection box size
+        if (tempCtx && canvas) {
           tempCanvas.width = selectionBox.width;
           tempCanvas.height = selectionBox.height;
           
-          // Draw the selected region from the main canvas
           tempCtx.drawImage(
             canvas,
-            selectionBox.x, // source x
-            selectionBox.y, // source y
-            selectionBox.width, // source width
-            selectionBox.height, // source height
-            0, // destination x
-            0, // destination y
-            selectionBox.width, // destination width
-            selectionBox.height // destination height
+            selectionBox.x,
+            selectionBox.y,
+            selectionBox.width,
+            selectionBox.height,
+            0,
+            0,
+            selectionBox.width,
+            selectionBox.height
           );
           
-          // Convert to PNG base64
           imageData = tempCanvas.toDataURL('image/png');
           extractedText = `[Image: ${selectionBox.width.toFixed(0)}x${selectionBox.height.toFixed(0)}px]`;
           
@@ -327,6 +347,15 @@ export const PDFViewer = ({
     if (onAnnotationsImport) {
       onAnnotationsImport(selectedAnnotations);
     }
+  };
+
+  const handleDocumentLoad = (e: any) => {
+    onTotalPagesChange(e.doc.numPages);
+    toast.success(`PDF loaded: ${e.doc.numPages} pages`);
+  };
+
+  const handlePageChange = (e: any) => {
+    onPageChange(e.currentPage + 1);
   };
 
   return (
@@ -477,12 +506,11 @@ export const PDFViewer = ({
 
       {/* PDF Display */}
       <div className="flex-1 overflow-auto bg-muted/30 p-4 relative">
-        <SearchPanel
-          pdfText={pdfText}
-          onSearchResult={setSearchResults}
-          isOpen={searchOpen}
-          onClose={() => setSearchOpen(false)}
-        />
+        {searchOpen && (
+          <div className="absolute top-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg p-2">
+            <ShowSearchPopover />
+          </div>
+        )}
         
         <AnnotationImportDialog
           open={annotationDialogOpen}
@@ -501,63 +529,50 @@ export const PDFViewer = ({
             <p className="text-sm text-muted-foreground">or click to browse</p>
           </div>
         ) : (
-          <div className="flex justify-center">
-            <div
-              ref={containerRef}
-              className="relative inline-block shadow-lg rounded-lg overflow-hidden bg-white"
-              onMouseDown={handleRegionMouseDown}
-              onMouseMove={handleRegionMouseMove}
-              onMouseUp={handleRegionMouseUp}
-              style={{ cursor: regionMode || imageMode ? "crosshair" : "auto" }}
-            >
-              <canvas ref={canvasRef} className="block" />
-              <div
-                ref={textLayerRef}
-                className="absolute top-0 left-0 overflow-hidden pointer-events-auto"
-                style={{ userSelect: !regionMode && !imageMode ? "text" : "none" }}
-              />
-              
-              {/* Selection box overlay */}
-              {isSelecting && selectionBox && (
-                <div
-                  className={`absolute border-3 border-dashed ${
-                    imageMode 
-                      ? "border-extraction-image bg-extraction-image/10" 
-                      : "border-info bg-info/10"
-                  }`}
-                  style={{
-                    left: selectionBox.x,
-                    top: selectionBox.y,
-                    width: selectionBox.width,
-                    height: selectionBox.height,
-                    pointerEvents: "none",
-                  }}
-                >
-                  {imageMode && (
-                    <div className="absolute -top-7 left-0 bg-extraction-image text-white text-xs px-2 py-1 rounded">
-                      📷 Image Capture
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Extraction markers overlay */}
-              <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-                {extractions
-                  .filter(ext => ext.page === currentPage && ext.coordinates)
-                  .map(extraction => (
-                    <ExtractionMarker
-                      key={extraction.id}
-                      extraction={extraction}
-                      onClick={() => {
-                        toast.info(`Extraction: ${extraction.fieldName}`, {
-                          description: extraction.text
-                        });
-                      }}
-                    />
-                  ))}
+          <div 
+            ref={containerRef}
+            className="pdf-viewer-container"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseUpCapture={handleTextSelection}
+            style={{ cursor: regionMode || imageMode ? "crosshair" : "auto" }}
+          >
+            <Worker workerUrl={`https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`}>
+              <div style={{ height: '750px' }}>
+                <Viewer
+                  fileUrl={fileUrl}
+                  plugins={[highlightPluginInstance, searchPluginInstance]}
+                  onDocumentLoad={handleDocumentLoad}
+                  onPageChange={handlePageChange}
+                  initialPage={currentPage - 1}
+                  defaultScale={scale}
+                />
               </div>
-            </div>
+            </Worker>
+
+            {/* Selection box overlay */}
+            {isSelecting && selectionBox && (
+              <div
+                className={`absolute border-3 border-dashed pointer-events-none ${
+                  imageMode 
+                    ? "border-extraction-image bg-extraction-image/10" 
+                    : "border-info bg-info/10"
+                }`}
+                style={{
+                  left: selectionBox.x,
+                  top: selectionBox.y,
+                  width: selectionBox.width,
+                  height: selectionBox.height,
+                }}
+              >
+                {imageMode && (
+                  <div className="absolute -top-7 left-0 bg-extraction-image text-white text-xs px-2 py-1 rounded">
+                    📷 Image Capture
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
