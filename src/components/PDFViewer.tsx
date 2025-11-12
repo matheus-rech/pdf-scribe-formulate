@@ -17,6 +17,7 @@ import { usePageAnnotations } from "@/hooks/usePageAnnotations";
 import { useCanvasHistory } from "@/hooks/useCanvasHistory";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import * as pdfjsLib from "pdfjs-dist";
+import { extractTextWithCoordinates, findTextInRegion, pdfToScreenCoords } from "@/lib/textExtraction";
 
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/highlight/lib/styles/index.css';
@@ -61,6 +62,7 @@ export const PDFViewer = ({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [pageTextCache, setPageTextCache] = useState<Map<number, any>>(new Map());
   const [searchOpen, setSearchOpen] = useState(false);
   const [annotationDialogOpen, setAnnotationDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
@@ -191,11 +193,11 @@ export const PDFViewer = ({
     };
   }, [fabricCanvas, saveState, drawingMode, currentPage, savePageAnnotation]);
 
-  // Get PDF page dimensions and update canvas size
+  // Get PDF page dimensions and extract text with coordinates
   useEffect(() => {
-    if (!file || !drawingMode) return;
+    if (!file) return;
 
-    const getPDFDimensions = async () => {
+    const getPDFData = async () => {
       try {
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
@@ -207,13 +209,19 @@ export const PDFViewer = ({
           width: viewport.width,
           height: viewport.height,
         });
+
+        // Extract text with precise coordinates
+        if (!pageTextCache.has(currentPage)) {
+          const textData = await extractTextWithCoordinates(file, currentPage, scale);
+          setPageTextCache(prev => new Map(prev).set(currentPage, textData));
+        }
       } catch (error) {
-        console.error("Error getting PDF dimensions:", error);
+        console.error("Error getting PDF data:", error);
       }
     };
 
-    getPDFDimensions();
-  }, [file, currentPage, scale, drawingMode]);
+    getPDFData();
+  }, [file, currentPage, scale]);
 
   // Extract text from PDF when file loads
   useEffect(() => {
@@ -458,6 +466,40 @@ export const PDFViewer = ({
 
     let extractedText = `[Region: ${selectionBox.width.toFixed(0)}x${selectionBox.height.toFixed(0)}px]`;
     let imageData: string | undefined = undefined;
+    let pdfCoordinates = selectionBox;
+
+    // Extract text with precise coordinates if in text selection mode or region mode
+    if ((textSelectionMode || regionMode) && pageTextCache.has(currentPage)) {
+      try {
+        const textData = pageTextCache.get(currentPage);
+        if (textData) {
+          const result = findTextInRegion(
+            textData.items,
+            selectionBox,
+            textData.pageHeight,
+            scale
+          );
+          
+          if (result.text) {
+            extractedText = result.text;
+            // Convert PDF coordinates back to screen coordinates for display
+            const screenCoords = pdfToScreenCoords(
+              result.pdfCoords.x,
+              result.pdfCoords.y,
+              result.pdfCoords.width,
+              result.pdfCoords.height,
+              textData.pageHeight,
+              scale
+            );
+            pdfCoordinates = screenCoords;
+            toast.success(`Extracted "${extractedText.substring(0, 50)}${extractedText.length > 50 ? '...' : ''}" to ${activeField}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error extracting text with coordinates:', error);
+        toast.error('Failed to extract text, using region coordinates');
+      }
+    }
 
     // Capture image if in image mode
     if (imageMode && pageCanvasRef.current) {
@@ -491,8 +533,6 @@ export const PDFViewer = ({
         console.error('Error capturing image:', error);
         toast.error('Failed to capture image');
       }
-    } else {
-      toast.success(`Region extracted to ${activeField}`);
     }
 
     onExtraction({
@@ -500,7 +540,12 @@ export const PDFViewer = ({
       fieldName: activeField,
       text: extractedText,
       page: currentPage,
-      coordinates: selectionBox,
+      coordinates: {
+        x: pdfCoordinates.x,
+        y: pdfCoordinates.y,
+        width: pdfCoordinates.width,
+        height: pdfCoordinates.height,
+      },
       method: imageMode ? "image" : "region",
       timestamp: new Date(),
       imageData,

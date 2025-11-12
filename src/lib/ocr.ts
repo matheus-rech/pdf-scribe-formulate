@@ -1,8 +1,12 @@
 import { pipeline, env } from '@huggingface/transformers';
+import { pdfToScreenCoords, screenToPdfCoords } from './textExtraction';
 
 // Configure transformers.js
 env.allowLocalModels = false;
 env.useBrowserCache = true;
+
+// Export coordinate helpers for external use
+export { pdfToScreenCoords, screenToPdfCoords };
 
 let ocrPipeline: any = null;
 
