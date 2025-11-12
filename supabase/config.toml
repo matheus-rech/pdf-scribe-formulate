@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.validate-extraction]
 verify_jwt = false
+
+[functions.validate-citation]
+verify_jwt = false

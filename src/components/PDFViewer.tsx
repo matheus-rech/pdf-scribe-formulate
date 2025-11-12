@@ -1144,6 +1144,16 @@ export const PDFViewer = ({
             onMouseUpCapture={handleTextSelection}
             style={{ cursor: regionMode || imageMode ? "crosshair" : "auto" }}
           >
+            {/* Citation Link Panel */}
+            {hoveredRegion && onJumpToExtraction && (
+              <CitationLinkPanel
+                extractions={extractions}
+                currentPage={currentPage}
+                hoveredRegion={hoveredRegion}
+                onJumpToExtraction={onJumpToExtraction}
+              />
+            )}
+
             <Worker workerUrl={`https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`}>
               <div style={{ height: '750px' }}>
                 <Viewer

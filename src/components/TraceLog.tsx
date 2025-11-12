@@ -7,8 +7,10 @@ import { toast } from "sonner";
 import { OCRDialog } from "./OCRDialog";
 import { OCRInfoCard } from "./OCRInfoCard";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Badge } from "@/components/ui/badge";
 import type { SourceCitation } from "@/lib/citationDetector";
 import { detectSourceCitations } from "@/lib/citationDetector";
+import { validateAllCitations, getCitationConfidenceColor, getCitationConfidenceBadge } from "@/lib/citationValidation";
 
 interface TraceLogProps {
   extractions: ExtractionEntry[];
@@ -157,7 +159,7 @@ export const TraceLog = ({
     if (!pdfFile || !onUpdateExtraction) return;
     
     setDetectingSource(entry.id);
-    toast.info("Detecting source...");
+    toast.info("Detecting and validating source...");
     
     try {
       const detection = await detectSourceCitations(
@@ -167,10 +169,18 @@ export const TraceLog = ({
       );
       
       if (detection.sourceCitations.length > 0) {
+        // Validate citations with AI
+        const validatedCitations = await validateAllCitations(
+          entry.text,
+          detection.sourceCitations
+        );
+        
         onUpdateExtraction(entry.id, {
-          sourceCitations: detection.sourceCitations
+          sourceCitations: validatedCitations
         });
-        toast.success(`Found ${detection.sourceCitations.length} source${detection.sourceCitations.length > 1 ? 's' : ''} (${(detection.confidence * 100).toFixed(0)}% confidence)`);
+        
+        const avgConfidence = validatedCitations.reduce((sum, c) => sum + c.confidence, 0) / validatedCitations.length;
+        toast.success(`Found ${validatedCitations.length} source${validatedCitations.length > 1 ? 's' : ''} (${(avgConfidence * 100).toFixed(0)}% avg confidence)`);
       } else {
         toast.error("No source found");
       }
@@ -185,7 +195,7 @@ export const TraceLog = ({
   const detectAllSources = async () => {
     if (!pdfFile || !onUpdateExtraction) return;
     
-    toast.info("Detecting sources for all extractions...");
+    toast.info("Detecting and validating sources for all extractions...");
     let detected = 0;
     
     for (const extraction of extractions) {
@@ -198,18 +208,27 @@ export const TraceLog = ({
           );
           
           if (detection.sourceCitations.length > 0) {
+            // Validate with AI
+            const validatedCitations = await validateAllCitations(
+              extraction.text,
+              detection.sourceCitations
+            );
+            
             onUpdateExtraction(extraction.id, {
-              sourceCitations: detection.sourceCitations
+              sourceCitations: validatedCitations
             });
             detected++;
           }
         } catch (error) {
           console.error(`Error detecting source for ${extraction.id}:`, error);
         }
+        
+        // Small delay between extractions
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
     
-    toast.success(`Detected sources for ${detected} extraction${detected !== 1 ? 's' : ''}`);
+    toast.success(`Detected and validated sources for ${detected} extraction${detected !== 1 ? 's' : ''}`);
   };
 
   const getMethodColor = (method: string) => {
@@ -362,13 +381,26 @@ export const TraceLog = ({
                               }}
                             >
                               <div className="flex items-start justify-between mb-1">
-                                <span className="text-xs font-medium text-primary">
-                                  Source {idx + 1} • Page {citation.page}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-primary">
+                                    Source {idx + 1} • Page {citation.page}
+                                  </span>
+                                  {citation.validated && (
+                                    <Badge variant="outline" className={`text-xs ${getCitationConfidenceColor(citation.confidence)}`}>
+                                      {getCitationConfidenceBadge(citation.confidence)}
+                                    </Badge>
+                                  )}
+                                </div>
                                 <span className="text-xs text-muted-foreground">
-                                  {(citation.confidence * 100).toFixed(0)}% match
+                                  {(citation.confidence * 100).toFixed(0)}%
                                 </span>
                               </div>
+                              
+                              {citation.validationResult && (
+                                <div className="text-xs text-muted-foreground mb-1">
+                                  <span className="font-medium">{citation.validationResult.matchType}:</span> {citation.validationResult.reasoning}
+                                </div>
+                              )}
                               
                               <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
                                 {citation.context}
@@ -377,6 +409,12 @@ export const TraceLog = ({
                               <div className="text-xs bg-primary/5 p-2 rounded border border-primary/10">
                                 "{citation.sourceText}"
                               </div>
+                              
+                              {citation.validationResult?.issues && citation.validationResult.issues.length > 0 && (
+                                <div className="mt-2 text-xs text-orange-600">
+                                  ⚠️ {citation.validationResult.issues.join(', ')}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>

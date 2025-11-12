@@ -8,6 +8,13 @@ export interface SourceCitation {
   sourceText: string;
   context: string;
   confidence: number;
+  validated?: boolean;
+  validationResult?: {
+    isValid: boolean;
+    matchType: string;
+    reasoning: string;
+    issues?: string[];
+  };
 }
 
 interface DetectionResult {

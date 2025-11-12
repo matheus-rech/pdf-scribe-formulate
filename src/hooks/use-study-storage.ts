@@ -85,7 +85,8 @@ export const useStudyStorage = (email: string | null) => {
         method: extraction.method,
         timestamp: extraction.timestamp.toISOString(),
         image_data: extraction.imageData || null,
-      });
+        source_citations: extraction.sourceCitations || null,
+      } as any);
 
       if (error) throw error;
     } catch (error: any) {
@@ -115,6 +116,7 @@ export const useStudyStorage = (email: string | null) => {
         method: e.method as any,
         timestamp: new Date(e.timestamp || e.created_at),
         imageData: e.image_data || undefined,
+        sourceCitations: e.source_citations as any,
       }));
     } catch (error: any) {
       console.error("Error loading extractions:", error);
