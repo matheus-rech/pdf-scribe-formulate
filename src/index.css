@@ -59,6 +59,13 @@ All colors MUST be HSL.
     --extraction-image: 210 85% 45%;
     --extraction-search: 14 90% 53%;
 
+    /* Text highlight colors */
+    --highlight-yellow: 48 96% 53%;
+    --highlight-green: 142 76% 36%;
+    --highlight-blue: 210 85% 55%;
+    --highlight-pink: 330 81% 60%;
+    --highlight-orange: 14 90% 53%;
+
     --radius: 0.5rem;
 
     --sidebar-background: 0 0% 98%;
@@ -161,6 +168,40 @@ All colors MUST be HSL.
   }
 
   .extraction-marker-pulse {
+    animation: pulse-border 2s ease-in-out infinite;
+  }
+
+  /* Highlight flash animation */
+  @keyframes flash-highlight {
+    0%, 100% { 
+      background-color: rgba(255, 200, 0, 0.3);
+      box-shadow: 0 0 0 0 rgba(255, 200, 0, 0.7);
+    }
+    50% { 
+      background-color: rgba(255, 200, 0, 0.8);
+      box-shadow: 0 0 0 10px rgba(255, 200, 0, 0);
+    }
+  }
+
+  .flash-highlight {
+    animation: flash-highlight 1.5s ease-out;
+  }
+
+  /* Text highlight styles */
+  .text-highlight {
+    position: absolute;
+    pointer-events: auto;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 2px;
+    z-index: 3;
+  }
+
+  .text-highlight:hover {
+    opacity: 0.8 !important;
+  }
+
+  .text-highlight.current-match {
     animation: pulse-border 2s ease-in-out infinite;
   }
 

@@ -13,10 +13,15 @@ import { extractAnnotationsFromPDF, type PDFAnnotation } from "@/lib/annotationP
 import { AnnotationImportDialog } from "./AnnotationImportDialog";
 import { AnnotationExportDialog } from "./AnnotationExportDialog";
 import { DrawingToolbar, type DrawingTool } from "./DrawingToolbar";
+import { HighlightToolbar } from "./HighlightToolbar";
+import { SearchPanel } from "./SearchPanel";
 import { useAnnotationCanvas } from "@/hooks/useAnnotationCanvas";
 import { usePageAnnotations } from "@/hooks/usePageAnnotations";
 import { useCanvasHistory } from "@/hooks/useCanvasHistory";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useTextHighlights } from "@/hooks/useTextHighlights";
+import { TextHighlight } from "@/types/highlights";
+import { navigateToPosition } from "@/lib/pdfNavigation";
 import * as pdfjsLib from "pdfjs-dist";
 import { extractTextWithCoordinates, findTextInRegion, pdfToScreenCoords } from "@/lib/textExtraction";
 
@@ -69,6 +74,9 @@ export const PDFViewer = ({
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [isLoadingAnnotations, setIsLoadingAnnotations] = useState(false);
+  const [pdfFullText, setPdfFullText] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [flashCoords, setFlashCoords] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageCanvasRef = useRef<HTMLCanvasElement | null>(null);
   
@@ -86,6 +94,17 @@ export const PDFViewer = ({
     getAllAnnotations,
     pageAnnotations,
   } = usePageAnnotations();
+
+  const {
+    highlights,
+    activeHighlightColor,
+    setActiveHighlightColor,
+    addHighlight,
+    removeHighlight,
+    getHighlightsForPage,
+    clearHighlightsOfType,
+    clearAllHighlights,
+  } = useTextHighlights();
 
   const {
     fabricCanvas,
@@ -131,6 +150,38 @@ export const PDFViewer = ({
       }
     },
   }, drawingMode);
+
+  // Highlight keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+H for highlighting
+      if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+        e.preventDefault();
+        handleHighlightSelection();
+      }
+      // F3 for next search result
+      if (e.key === 'F3' && !e.shiftKey && searchResults.length > 0) {
+        e.preventDefault();
+        // This will be handled by SearchPanel
+      }
+      // Shift+F3 for previous search result
+      if (e.key === 'F3' && e.shiftKey && searchResults.length > 0) {
+        e.preventDefault();
+        // This will be handled by SearchPanel
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [searchResults]);
+
+  // Handle highlight flash animation
+  useEffect(() => {
+    if (flashCoords) {
+      const timer = setTimeout(() => setFlashCoords(null), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [flashCoords]);
 
   // Handle Enter key for polygon completion
   useEffect(() => {
@@ -244,6 +295,7 @@ export const PDFViewer = ({
           fullText += `\n\n[Page ${i}]\n${pageText}`;
         }
         
+        setPdfFullText(fullText);
         if (onPdfTextExtracted) {
           onPdfTextExtracted(fullText);
         }
@@ -280,13 +332,71 @@ export const PDFViewer = ({
       ext => ext.page === props.pageIndex + 1 && ext.coordinates
     );
 
+    const pageHighlights = getHighlightsForPage(props.pageIndex + 1);
+    const pageSearchResults = searchResults.filter(r => r.page === props.pageIndex + 1 && r.coordinates);
+
     return (
       <div>
+        {/* Text Highlights */}
+        {pageHighlights.map((highlight) => {
+          const coords = highlight.coordinates;
+          
+          return (
+            <div
+              key={highlight.id}
+              className={`text-highlight ${flashCoords && 
+                flashCoords.x === coords.x && 
+                flashCoords.y === coords.y ? 'flash-highlight' : ''
+              }`}
+              style={{
+                position: 'absolute',
+                left: `${coords.x}px`,
+                top: `${coords.y}px`,
+                width: `${coords.width}px`,
+                height: `${coords.height}px`,
+                backgroundColor: highlight.color,
+                opacity: 0.4,
+                pointerEvents: 'auto',
+              }}
+              onClick={() => {
+                toast.info(`Highlight (${highlight.type})`, {
+                  description: highlight.text.substring(0, 100),
+                });
+              }}
+              title={`${highlight.text}${highlight.note ? `\n\nNote: ${highlight.note}` : ''}`}
+            />
+          );
+        })}
+
+        {/* Search Result Highlights */}
+        {pageSearchResults.map((result, idx) => {
+          const coords = result.coordinates;
+          
+          return (
+            <div
+              key={`search-${idx}`}
+              className="text-highlight"
+              style={{
+                position: 'absolute',
+                left: `${coords.x}px`,
+                top: `${coords.y}px`,
+                width: `${coords.width}px`,
+                height: `${coords.height}px`,
+                backgroundColor: 'hsl(var(--extraction-search))',
+                opacity: 0.5,
+                border: '2px solid hsl(var(--extraction-search))',
+                pointerEvents: 'auto',
+              }}
+              title={`Search result: ${result.text}`}
+            />
+          );
+        })}
+
+        {/* Extraction Highlights */}
         {pageExtractions.map((extraction) => {
           const coords = extraction.coordinates;
           if (!coords) return null;
 
-          // Use absolute positioning with pixels
           const left = coords.x;
           const top = coords.y;
           const width = coords.width;
@@ -330,6 +440,72 @@ export const PDFViewer = ({
       </div>
     );
   };
+
+  // Handle text selection highlighting
+  const handleHighlightSelection = useCallback(() => {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim();
+
+    if (!selectedText || selectedText.length === 0) {
+      toast.error("Please select text to highlight");
+      return;
+    }
+
+    const range = selection!.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+
+    if (containerRect) {
+      addHighlight({
+        pageNumber: currentPage,
+        text: selectedText,
+        coordinates: {
+          x: rect.left - containerRect.left,
+          y: rect.top - containerRect.top,
+          width: rect.width,
+          height: rect.height,
+        },
+        type: 'selection',
+      });
+
+      toast.success("Text highlighted");
+      selection!.removeAllRanges();
+    }
+  }, [currentPage, addHighlight]);
+
+  // Handle search result navigation
+  const handleSearchResultNavigation = useCallback((result: any) => {
+    navigateToPosition(
+      {
+        page: result.page,
+        coordinates: result.coordinates,
+        highlight: true,
+      },
+      containerRef,
+      onPageChange,
+      setFlashCoords
+    );
+  }, [onPageChange]);
+
+  // Handle search results with highlight creation
+  const handleSearchResults = useCallback((results: any[]) => {
+    setSearchResults(results);
+    
+    // Clear previous search highlights
+    clearHighlightsOfType('search');
+    
+    // Add new search highlights
+    results.forEach(result => {
+      if (result.coordinates) {
+        addHighlight({
+          pageNumber: result.page,
+          text: result.text,
+          coordinates: result.coordinates,
+          type: 'search',
+        });
+      }
+    });
+  }, [addHighlight, clearHighlightsOfType]);
 
   const highlightPluginInstance = highlightPlugin({
     renderHighlightContent,
@@ -697,6 +873,20 @@ export const PDFViewer = ({
           </SelectContent>
         </Select>
 
+        {/* Highlight Toolbar */}
+        {file && (
+          <HighlightToolbar
+            activeColor={activeHighlightColor}
+            onColorChange={setActiveHighlightColor}
+            onClearHighlights={() => {
+              clearAllHighlights();
+              toast.success("All highlights cleared");
+            }}
+            highlightCount={Array.from(highlights.values()).reduce((sum, arr) => sum + arr.length, 0)}
+            onHighlightSelection={handleHighlightSelection}
+          />
+        )}
+
         <div className="flex gap-1 border-l border-border pl-2">
           <Button
             variant={textSelectionMode ? "default" : "outline"}
@@ -819,9 +1009,19 @@ export const PDFViewer = ({
       {/* PDF Display */}
       <div className="flex-1 overflow-auto bg-muted/30 p-4 relative">
         {searchOpen && (
-          <div className="absolute top-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg p-2">
-            <ShowSearchPopover />
-          </div>
+          <SearchPanel
+            pdfText={pdfFullText}
+            onSearchResult={handleSearchResults}
+            onNavigateToResult={handleSearchResultNavigation}
+            isOpen={searchOpen}
+            onClose={() => {
+              setSearchOpen(false);
+              setSearchResults([]);
+              clearHighlightsOfType('search');
+            }}
+            pageTextCache={pageTextCache}
+            scale={scale}
+          />
         )}
         
         <AnnotationImportDialog
