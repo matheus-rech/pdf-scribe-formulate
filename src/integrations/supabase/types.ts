@@ -28,7 +28,7 @@ export type Database = {
           source_page: number | null
           source_section: string | null
           source_text: string | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           confidence_score: number
@@ -43,7 +43,7 @@ export type Database = {
           source_page?: number | null
           source_section?: string | null
           source_text?: string | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           confidence_score?: number
@@ -58,7 +58,7 @@ export type Database = {
           source_page?: number | null
           source_section?: string | null
           source_text?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -98,7 +98,7 @@ export type Database = {
           requires_human_review: boolean
           total_reviewers: number
           updated_at: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           agreeing_reviewers: number
@@ -120,7 +120,7 @@ export type Database = {
           requires_human_review?: boolean
           total_reviewers: number
           updated_at?: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           agreeing_reviewers?: number
@@ -142,7 +142,7 @@ export type Database = {
           requires_human_review?: boolean
           total_reviewers?: number
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -170,7 +170,7 @@ export type Database = {
           study_id: string
           text: string | null
           timestamp: string | null
-          user_id: string | null
+          user_id: string
           validation_status: string | null
         }
         Insert: {
@@ -188,7 +188,7 @@ export type Database = {
           study_id: string
           text?: string | null
           timestamp?: string | null
-          user_id?: string | null
+          user_id: string
           validation_status?: string | null
         }
         Update: {
@@ -206,7 +206,7 @@ export type Database = {
           study_id?: string
           text?: string | null
           timestamp?: string | null
-          user_id?: string | null
+          user_id?: string
           validation_status?: string | null
         }
         Relationships: [
@@ -231,7 +231,7 @@ export type Database = {
           system_prompt: string
           temperature: number
           updated_at: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string
@@ -244,7 +244,7 @@ export type Database = {
           system_prompt: string
           temperature?: number
           updated_at?: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -257,7 +257,7 @@ export type Database = {
           system_prompt?: string
           temperature?: number
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -272,7 +272,7 @@ export type Database = {
           pdf_url: string | null
           total_pages: number | null
           updated_at: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string
@@ -284,7 +284,7 @@ export type Database = {
           pdf_url?: string | null
           total_pages?: number | null
           updated_at?: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -296,7 +296,7 @@ export type Database = {
           pdf_url?: string | null
           total_pages?: number | null
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
