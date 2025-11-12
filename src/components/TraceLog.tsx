@@ -1,18 +1,23 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon } from "lucide-react";
+import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon, Sparkles } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { toast } from "sonner";
+import { OCRDialog } from "./OCRDialog";
+import { OCRInfoCard } from "./OCRInfoCard";
 
 interface TraceLogProps {
   extractions: ExtractionEntry[];
   onJumpToExtraction: (entry: ExtractionEntry) => void;
   onClearAll: () => void;
+  onUpdateExtraction?: (id: string, updates: Partial<ExtractionEntry>) => void;
 }
 
-export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceLogProps) => {
+export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll, onUpdateExtraction }: TraceLogProps) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
+  const [selectedImageForOCR, setSelectedImageForOCR] = useState<{ data: string; entryId: string } | null>(null);
 
   const filteredExtractions = extractions.filter((entry) =>
     entry.fieldName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -113,6 +118,24 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceL
     toast.success("Image downloaded");
   };
 
+  const handleOpenOCR = (entry: ExtractionEntry, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!entry.imageData) return;
+    
+    setSelectedImageForOCR({ data: entry.imageData, entryId: entry.id });
+    setOcrDialogOpen(true);
+  };
+
+  const handleOCRExtractToField = (text: string) => {
+    if (selectedImageForOCR && onUpdateExtraction) {
+      onUpdateExtraction(selectedImageForOCR.entryId, {
+        text: text,
+        method: "ai" // Mark as AI-extracted
+      });
+      toast.success("OCR text added to extraction");
+    }
+  };
+
   const getMethodColor = (method: string) => {
     switch (method) {
       case "manual":
@@ -147,6 +170,11 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceL
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-border">
         <h2 className="text-lg font-semibold mb-3">Extraction Trace Log</h2>
+        
+        {/* OCR Info Card */}
+        <div className="mb-3">
+          <OCRInfoCard />
+        </div>
         
         {/* Export Section */}
         <Card className="p-3 bg-primary/5 border-primary/20 mb-3">
@@ -213,15 +241,26 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceL
                 <div className="font-medium text-sm">{entry.fieldName}</div>
                 <div className="flex items-center gap-2">
                   {entry.method === "image" && entry.imageData && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => downloadImage(entry, e)}
-                      className="h-6 w-6 p-0 hover:bg-extraction-image/10"
-                      title="Download image"
-                    >
-                      <Download className="h-3 w-3 text-extraction-image" />
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => handleOpenOCR(entry, e)}
+                        className="h-6 w-6 p-0 hover:bg-primary/10"
+                        title="Extract text with OCR"
+                      >
+                        <Sparkles className="h-3 w-3 text-primary" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => downloadImage(entry, e)}
+                        className="h-6 w-6 p-0 hover:bg-extraction-image/10"
+                        title="Download image"
+                      >
+                        <Download className="h-3 w-3 text-extraction-image" />
+                      </Button>
+                    </>
                   )}
                   {getMethodBadge(entry.method)}
                 </div>
@@ -250,9 +289,10 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceL
                     }}
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors rounded flex items-center justify-center opacity-0 group-hover:opacity-100">
-                    <span className="text-xs bg-white/90 px-2 py-1 rounded shadow-sm">
-                      Click to enlarge
-                    </span>
+                    <div className="bg-white/95 px-3 py-2 rounded shadow-md text-xs space-y-1">
+                      <div className="font-medium">Click to enlarge</div>
+                      <div className="text-muted-foreground">✨ Use OCR to extract text</div>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -269,6 +309,16 @@ export const TraceLog = ({ extractions, onJumpToExtraction, onClearAll }: TraceL
           ))
         )}
       </div>
+
+      {/* OCR Dialog */}
+      {selectedImageForOCR && (
+        <OCRDialog
+          open={ocrDialogOpen}
+          onOpenChange={setOcrDialogOpen}
+          imageData={selectedImageForOCR.data}
+          onExtractToField={handleOCRExtractToField}
+        />
+      )}
     </div>
   );
 };

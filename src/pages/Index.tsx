@@ -27,6 +27,14 @@ const Index = () => {
     setExtractions(prev => [...prev, entry]);
   };
 
+  const handleUpdateExtraction = (id: string, updates: Partial<ExtractionEntry>) => {
+    setExtractions(prev => 
+      prev.map(entry => 
+        entry.id === id ? { ...entry, ...updates } : entry
+      )
+    );
+  };
+
   const handleJumpToExtraction = (entry: ExtractionEntry) => {
     setCurrentPage(entry.page);
     // Scroll to coordinates if available
@@ -79,6 +87,7 @@ const Index = () => {
           extractions={extractions}
           onJumpToExtraction={handleJumpToExtraction}
           onClearAll={() => setExtractions([])}
+          onUpdateExtraction={handleUpdateExtraction}
         />
       </div>
     </div>
