@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2, Check, AlertCircle } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { Card } from "./ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -87,6 +88,16 @@ export const ExtractionForm = ({
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [isExtractingPICOT, setIsExtractingPICOT] = useState(false);
+  
+  // Validation state
+  const [validationResults, setValidationResults] = useState<Record<string, {
+    isValid: boolean;
+    confidence: number;
+    issues: string[];
+    suggestions: string;
+    sourceText: string;
+  }>>({});
+  const [validatingFields, setValidatingFields] = useState<Set<string>>(new Set());
   
   // Dynamic lists
   const [studyArms, setStudyArms] = useState<StudyArm[]>([]);
@@ -296,6 +307,108 @@ export const ExtractionForm = ({
     ));
   };
 
+  const validateField = async (fieldName: string) => {
+    const fieldValue = getFieldValue(fieldName);
+    if (!fieldValue || !pdfText) {
+      toast.error("Field is empty or PDF not loaded");
+      return;
+    }
+
+    setValidatingFields(prev => new Set(prev).add(fieldName));
+
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-extraction', {
+        body: { fieldName, fieldValue, pdfText }
+      });
+
+      if (error) throw error;
+
+      setValidationResults(prev => ({
+        ...prev,
+        [fieldName]: data
+      }));
+
+      toast.success(
+        data.isValid 
+          ? `✓ Validated (${data.confidence}% confidence)` 
+          : `⚠ Issues found: ${data.issues.join(", ")}`
+      );
+    } catch (error) {
+      console.error("Validation error:", error);
+      toast.error("Validation failed");
+    } finally {
+      setValidatingFields(prev => {
+        const next = new Set(prev);
+        next.delete(fieldName);
+        return next;
+      });
+    }
+  };
+
+  const getFieldValidationStatus = (fieldName: string) => {
+    const result = validationResults[fieldName];
+    if (!result) return null;
+    
+    if (result.isValid && result.confidence >= 80) return 'valid';
+    if (result.confidence >= 50) return 'warning';
+    return 'invalid';
+  };
+
+  const getFieldClassName = (fieldName: string, baseClass: string = '') => {
+    const status = getFieldValidationStatus(fieldName);
+    let statusClass = '';
+    
+    if (status === 'valid') statusClass = 'border-green-500 bg-green-50/50 dark:bg-green-950/20';
+    else if (status === 'warning') statusClass = 'border-yellow-500 bg-yellow-50/50 dark:bg-yellow-950/20';
+    else if (status === 'invalid') statusClass = 'border-red-500 bg-red-50/50 dark:bg-red-950/20';
+    
+    return `${baseClass} ${statusClass}`.trim();
+  };
+
+  const renderValidationButton = (fieldName: string) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 shrink-0"
+      onClick={() => validateField(fieldName)}
+      disabled={validatingFields.has(fieldName) || !pdfText}
+      title="Validate against PDF"
+    >
+      {validatingFields.has(fieldName) ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : getFieldValidationStatus(fieldName) === 'valid' ? (
+        <Check className="h-4 w-4 text-green-600" />
+      ) : getFieldValidationStatus(fieldName) === 'invalid' ? (
+        <AlertCircle className="h-4 w-4 text-red-600" />
+      ) : getFieldValidationStatus(fieldName) === 'warning' ? (
+        <AlertCircle className="h-4 w-4 text-yellow-600" />
+      ) : (
+        <Check className="h-4 w-4 text-muted-foreground" />
+      )}
+    </Button>
+  );
+
+  const renderValidationAlert = (fieldName: string) => {
+    const result = validationResults[fieldName];
+    if (!result || result.isValid) return null;
+
+    return (
+      <Alert variant="destructive" className="mt-2">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription className="text-xs">
+          <strong>Issues:</strong> {result.issues.join(", ")}
+          {result.suggestions && (
+            <>
+              <br />
+              <strong>Suggestion:</strong> {result.suggestions}
+            </>
+          )}
+        </AlertDescription>
+      </Alert>
+    );
+  };
+
   const handleGeneratePICOT = async () => {
     if (!pdfText || pdfText.trim().length === 0) {
       toast.error("Please load a PDF first");
@@ -395,17 +508,21 @@ export const ExtractionForm = ({
               <>
                 <div className="space-y-2">
                   <Label htmlFor="citation">Full Citation (Required)</Label>
-                  <Textarea
-                    id="citation"
-                    value={getFieldValue("citation")}
-                    onChange={(e) => handleFieldChange("citation", e.target.value)}
-                    onFocus={() => onFieldFocus("citation")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "citation" ? "ring-2 ring-primary" : ""}
-                    rows={3}
-                    placeholder="Paste citation or title..."
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <Textarea
+                      id="citation"
+                      value={getFieldValue("citation")}
+                      onChange={(e) => handleFieldChange("citation", e.target.value)}
+                      onFocus={() => onFieldFocus("citation")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={`flex-1 ${activeField === "citation" ? "ring-2 ring-primary" : ""} ${getFieldClassName("citation")}`}
+                      rows={3}
+                      placeholder="Paste citation or title..."
+                      required
+                    />
+                    {renderValidationButton("citation")}
+                  </div>
+                  {renderValidationAlert("citation")}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -564,54 +681,70 @@ export const ExtractionForm = ({
 
                 <div className="space-y-2">
                   <Label htmlFor="population">Population</Label>
-                  <Textarea
-                    id="population"
-                    value={getFieldValue("population")}
-                    onChange={(e) => handleFieldChange("population", e.target.value)}
-                    onFocus={() => onFieldFocus("population")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "population" ? "ring-2 ring-primary" : ""}
-                    rows={3}
-                  />
+                  <div className="flex gap-2">
+                    <Textarea
+                      id="population"
+                      value={getFieldValue("population")}
+                      onChange={(e) => handleFieldChange("population", e.target.value)}
+                      onFocus={() => onFieldFocus("population")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={`flex-1 ${activeField === "population" ? "ring-2 ring-primary" : ""} ${getFieldClassName("population")}`}
+                      rows={3}
+                    />
+                    {renderValidationButton("population")}
+                  </div>
+                  {renderValidationAlert("population")}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="intervention">Intervention</Label>
-                  <Textarea
-                    id="intervention"
-                    value={getFieldValue("intervention")}
-                    onChange={(e) => handleFieldChange("intervention", e.target.value)}
-                    onFocus={() => onFieldFocus("intervention")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "intervention" ? "ring-2 ring-primary" : ""}
-                    rows={3}
-                  />
+                  <div className="flex gap-2">
+                    <Textarea
+                      id="intervention"
+                      value={getFieldValue("intervention")}
+                      onChange={(e) => handleFieldChange("intervention", e.target.value)}
+                      onFocus={() => onFieldFocus("intervention")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={`flex-1 ${activeField === "intervention" ? "ring-2 ring-primary" : ""} ${getFieldClassName("intervention")}`}
+                      rows={3}
+                    />
+                    {renderValidationButton("intervention")}
+                  </div>
+                  {renderValidationAlert("intervention")}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="comparator">Comparator</Label>
-                  <Textarea
-                    id="comparator"
-                    value={getFieldValue("comparator")}
-                    onChange={(e) => handleFieldChange("comparator", e.target.value)}
-                    onFocus={() => onFieldFocus("comparator")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "comparator" ? "ring-2 ring-primary" : ""}
-                    rows={2}
-                  />
+                  <div className="flex gap-2">
+                    <Textarea
+                      id="comparator"
+                      value={getFieldValue("comparator")}
+                      onChange={(e) => handleFieldChange("comparator", e.target.value)}
+                      onFocus={() => onFieldFocus("comparator")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={`flex-1 ${activeField === "comparator" ? "ring-2 ring-primary" : ""} ${getFieldClassName("comparator")}`}
+                      rows={2}
+                    />
+                    {renderValidationButton("comparator")}
+                  </div>
+                  {renderValidationAlert("comparator")}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="outcomes">Outcomes Measured</Label>
-                  <Textarea
-                    id="outcomes"
-                    value={getFieldValue("outcomes")}
-                    onChange={(e) => handleFieldChange("outcomes", e.target.value)}
-                    onFocus={() => onFieldFocus("outcomes")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "outcomes" ? "ring-2 ring-primary" : ""}
-                    rows={3}
-                  />
+                  <div className="flex gap-2">
+                    <Textarea
+                      id="outcomes"
+                      value={getFieldValue("outcomes")}
+                      onChange={(e) => handleFieldChange("outcomes", e.target.value)}
+                      onFocus={() => onFieldFocus("outcomes")}
+                      onBlur={() => onFieldFocus(null)}
+                      className={`flex-1 ${activeField === "outcomes" ? "ring-2 ring-primary" : ""} ${getFieldClassName("outcomes")}`}
+                      rows={3}
+                    />
+                    {renderValidationButton("outcomes")}
+                  </div>
+                  {renderValidationAlert("outcomes")}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
