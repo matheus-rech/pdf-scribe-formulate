@@ -12,6 +12,9 @@ import { Card } from "./ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ValidationSummary } from "./ValidationSummary";
+import { ConfidenceBadge } from "./ConfidenceBadge";
+import { ExtractButton } from "./ExtractButton";
+import { ExtractionPreview } from "./ExtractionPreview";
 
 interface ExtractionFormProps {
   activeField: string | null;
@@ -92,6 +95,21 @@ export const ExtractionForm = ({
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [isExtractingPICOT, setIsExtractingPICOT] = useState(false);
+  
+  // AI Extraction state
+  const [isExtractingStep, setIsExtractingStep] = useState<Record<number, boolean>>({});
+  const [isExtractingAll, setIsExtractingAll] = useState(false);
+  const [confidenceScores, setConfidenceScores] = useState<Record<string, {
+    confidence: number;
+    sourceSection: string;
+    sourceText: string;
+  }>>({});
+  const [previewData, setPreviewData] = useState<{
+    extractedData: Record<string, string>;
+    confidenceScores: Record<string, any>;
+    stepNumber: number;
+    stepTitle: string;
+  } | null>(null);
   
   // Validation state
   const [validationResults, setValidationResults] = useState<Record<string, {
@@ -398,6 +416,167 @@ export const ExtractionForm = ({
       )}
     </Button>
   );
+
+  const renderConfidenceBadge = (fieldName: string) => {
+    const confidence = confidenceScores[fieldName];
+    if (!confidence) return null;
+    
+    return (
+      <ConfidenceBadge
+        confidence={confidence.confidence}
+        sourceSection={confidence.sourceSection}
+        sourceText={confidence.sourceText}
+        className="ml-2"
+      />
+    );
+  };
+
+  // AI Extraction functions
+  const handleExtractStep = async (stepNumber: number) => {
+    if (!pdfText) {
+      toast.error("Please load a PDF first");
+      return;
+    }
+
+    setIsExtractingStep(prev => ({ ...prev, [stepNumber]: true }));
+
+    try {
+      const { data, error } = await supabase.functions.invoke("extract-form-step", {
+        body: { 
+          stepNumber, 
+          pdfText, 
+          studyId
+        }
+      });
+
+      if (error) throw error;
+
+      const { extractedData, confidenceScores: scores } = data;
+      
+      // Show preview dialog
+      setPreviewData({
+        extractedData,
+        confidenceScores: scores,
+        stepNumber,
+        stepTitle: STEPS[stepNumber - 1].title
+      });
+
+    } catch (error: any) {
+      console.error("Extraction error:", error);
+      if (error.message?.includes("Rate limit")) {
+        toast.error("Rate limit exceeded. Please wait a moment.");
+      } else if (error.message?.includes("credits")) {
+        toast.error("AI credits depleted. Please add credits.");
+      } else {
+        toast.error("Extraction failed: " + (error.message || "Unknown error"));
+      }
+    } finally {
+      setIsExtractingStep(prev => ({ ...prev, [stepNumber]: false }));
+    }
+  };
+
+  const handleAcceptExtraction = (selectedFields: string[]) => {
+    if (!previewData) return;
+
+    const { extractedData, confidenceScores: scores } = previewData;
+    
+    // Update form data with selected fields
+    const updates: Record<string, string> = {};
+    selectedFields.forEach(field => {
+      if (extractedData[field]) {
+        updates[field] = extractedData[field];
+      }
+    });
+    
+    setFormData(prev => ({ ...prev, ...updates }));
+    setConfidenceScores(prev => ({ ...prev, ...scores }));
+    
+    // Create extraction entries for trace log
+    selectedFields.forEach(field => {
+      if (extractedData[field] && extractedData[field] !== "Not specified") {
+        onExtraction({
+          id: `ai-${field}-${Date.now()}`,
+          fieldName: field,
+          text: String(extractedData[field]),
+          page: 1,
+          method: "ai",
+          timestamp: new Date(),
+          confidence_score: scores[field]?.confidence || 70
+        });
+      }
+    });
+
+    toast.success(`Extracted ${selectedFields.length} fields successfully!`);
+    setPreviewData(null);
+  };
+
+  const handleRejectExtraction = () => {
+    toast.info("Extraction cancelled");
+    setPreviewData(null);
+  };
+
+  const handleExtractAll = async () => {
+    if (!pdfText) {
+      toast.error("Please load a PDF first");
+      return;
+    }
+
+    setIsExtractingAll(true);
+    const stepsToExtract = [1, 3, 4, 5, 6, 7, 8]; // Skip step 2 (PICO-T has its own button)
+
+    try {
+      const promises = stepsToExtract.map(stepNumber => 
+        supabase.functions.invoke("extract-form-step", {
+          body: { stepNumber, pdfText, studyId }
+        })
+      );
+
+      const results = await Promise.allSettled(promises);
+      
+      let successCount = 0;
+      const allExtractedData: Record<string, string> = {};
+      const allConfidenceScores: Record<string, any> = {};
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.data) {
+          successCount++;
+          const { extractedData, confidenceScores } = result.value.data;
+          Object.assign(allExtractedData, extractedData);
+          Object.assign(allConfidenceScores, confidenceScores);
+        } else {
+          console.error(`Step ${stepsToExtract[index]} failed:`, result);
+        }
+      });
+
+      if (successCount > 0) {
+        setFormData(prev => ({ ...prev, ...allExtractedData }));
+        setConfidenceScores(prev => ({ ...prev, ...allConfidenceScores }));
+
+        Object.entries(allExtractedData).forEach(([field, value]) => {
+          if (value && value !== "Not specified") {
+            onExtraction({
+              id: `ai-${field}-${Date.now()}`,
+              fieldName: field,
+              text: String(value),
+              page: 1,
+              method: "ai",
+              timestamp: new Date(),
+              confidence_score: allConfidenceScores[field]?.confidence || 70
+            });
+          }
+        });
+
+        toast.success(`Extracted data from ${successCount} steps successfully!`);
+      } else {
+        toast.error("All extractions failed");
+      }
+    } catch (error) {
+      console.error("Batch extraction error:", error);
+      toast.error("Batch extraction failed");
+    } finally {
+      setIsExtractingAll(false);
+    }
+  };
 
   const renderValidationAlert = (fieldName: string) => {
     const result = validationResults[fieldName];
@@ -783,10 +962,35 @@ export const ExtractionForm = ({
         />
 
         <div>
-          <h2 className="text-xl font-semibold mb-1">{STEPS[currentStep - 1].title}</h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            {pdfLoaded ? "Click on a field, then select text from the PDF" : "Load a PDF to begin extraction"}
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold mb-1">{STEPS[currentStep - 1].title}</h2>
+              <p className="text-sm text-muted-foreground">
+                {pdfLoaded ? "Click on a field, then select text from the PDF" : "Load a PDF to begin extraction"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {currentStep !== 2 && ( // Step 2 (PICO-T) has its own extraction button
+                <ExtractButton
+                  onClick={() => handleExtractStep(currentStep)}
+                  isLoading={isExtractingStep[currentStep] || false}
+                  disabled={!pdfLoaded || isExtractingAll}
+                  size="sm"
+                />
+              )}
+              {currentStep === 1 && (
+                <ExtractButton
+                  onClick={handleExtractAll}
+                  isLoading={isExtractingAll}
+                  disabled={!pdfLoaded}
+                  variant="default"
+                  size="sm"
+                >
+                  Extract All Steps
+                </ExtractButton>
+              )}
+            </div>
+          </div>
 
           <div className="space-y-4">
             {/* STEP 1: STUDY ID */}
@@ -794,7 +998,7 @@ export const ExtractionForm = ({
               <>
                 <div className="space-y-2">
                   <Label htmlFor="citation">Full Citation (Required)</Label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-start">
                     <Textarea
                       id="citation"
                       value={getFieldValue("citation")}
@@ -804,10 +1008,10 @@ export const ExtractionForm = ({
                       className={`flex-1 ${activeField === "citation" ? "ring-2 ring-primary" : ""} ${getFieldClassName("citation")}`}
                       rows={3}
                       placeholder="Paste citation or title..."
-                      required
                     />
                     {renderValidationButton("citation")}
                   </div>
+                  {renderConfidenceBadge("citation")}
                   {renderValidationAlert("citation")}
                 </div>
 
@@ -1826,6 +2030,19 @@ export const ExtractionForm = ({
           </Button>
         )}
       </div>
+      
+      {/* Extraction Preview Dialog */}
+      {previewData && (
+        <ExtractionPreview
+          open={!!previewData}
+          onOpenChange={(open) => !open && setPreviewData(null)}
+          extractedData={previewData.extractedData}
+          confidenceScores={previewData.confidenceScores}
+          onAccept={handleAcceptExtraction}
+          onReject={handleRejectExtraction}
+          stepTitle={previewData.stepTitle}
+        />
+      )}
     </div>
   );
 };
