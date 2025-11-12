@@ -428,7 +428,7 @@ export const ExtractionForm = ({
     setIsExtractingPICOT(true);
     try {
       const { data, error } = await supabase.functions.invoke("extract-picot", {
-        body: { pdfText }
+        body: { pdfText, studyId }
       });
 
       if (error) {

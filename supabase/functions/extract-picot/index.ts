@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { pdfText } = await req.json();
+    const { pdfText, studyId } = await req.json();
     
     if (!pdfText || pdfText.trim().length === 0) {
       return new Response(
@@ -29,7 +30,42 @@ serve(async (req) => {
       );
     }
 
-    console.log("Analyzing PDF text for PICO-T extraction, length:", pdfText.length);
+    // Load pre-processed chunks if studyId provided
+    let targetText = pdfText;
+    
+    if (studyId) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      
+      const { data: study } = await supabase
+        .from("studies")
+        .select("pdf_chunks")
+        .eq("id", studyId)
+        .single();
+      
+      if (study?.pdf_chunks?.sections) {
+        const relevantSections = ["abstract", "introduction", "methods", "results"];
+        const sections = study.pdf_chunks.sections.filter(
+          (s: any) => relevantSections.includes(s.type)
+        );
+        
+        if (sections.length > 0) {
+          const fullText = study.pdf_chunks.pageChunks
+            .map((c: any) => c.text)
+            .join("\n\n");
+          
+          targetText = sections
+            .map((s: any) => fullText.substring(s.charStart, s.charEnd))
+            .join("\n\n---\n\n");
+          
+          console.log("Using section-aware extraction, text length:", targetText.length);
+        }
+      }
+    }
+    
+    console.log("Analyzing PDF text for PICO-T extraction, length:", targetText.length);
 
     const systemPrompt = `You are a clinical research data extraction specialist. Analyze the provided clinical study text and extract the PICO-T framework components with high precision.
 
@@ -54,7 +90,7 @@ Extract detailed, specific information from the study text. If information is no
           { role: "system", content: systemPrompt },
           { 
             role: "user", 
-            content: `Extract the PICO-T framework from this clinical study:\n\n${pdfText.substring(0, 50000)}` 
+            content: `Extract the PICO-T framework from this clinical study:\n\n${targetText.substring(0, 50000)}` 
           }
         ],
         tools: [

@@ -82,6 +82,7 @@ export type Database = {
           email: string
           id: string
           name: string
+          pdf_chunks: Json | null
           pdf_name: string | null
           pdf_url: string | null
           total_pages: number | null
@@ -92,6 +93,7 @@ export type Database = {
           email: string
           id?: string
           name: string
+          pdf_chunks?: Json | null
           pdf_name?: string | null
           pdf_url?: string | null
           total_pages?: number | null
@@ -102,6 +104,7 @@ export type Database = {
           email?: string
           id?: string
           name?: string
+          pdf_chunks?: Json | null
           pdf_name?: string | null
           pdf_url?: string | null
           total_pages?: number | null

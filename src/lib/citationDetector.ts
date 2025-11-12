@@ -1,4 +1,5 @@
 import { extractTextWithCoordinates, type TextItem } from './textExtraction';
+import { searchPageChunks, getTextItemsInRange, type PageChunk } from './pdfChunking';
 import Fuse from 'fuse.js';
 
 export interface SourceCitation {
@@ -26,7 +27,8 @@ interface DetectionResult {
 export async function detectSourceCitations(
   extractedText: string,
   pdfFile: File,
-  pageNumber?: number
+  pageNumber?: number,
+  preProcessedChunks?: PageChunk[]
 ): Promise<DetectionResult> {
   if (!extractedText || extractedText.trim().length < 3) {
     return {
@@ -37,14 +39,54 @@ export async function detectSourceCitations(
   }
 
   try {
-    // Determine pages to search
+    // Use pre-processed chunks if available
+    if (preProcessedChunks && preProcessedChunks.length > 0) {
+      const matches = searchPageChunks(extractedText, preProcessedChunks, {
+        maxResults: 10,
+        pageLimit: pageNumber ? [pageNumber] : undefined
+      });
+      
+      if (matches.length === 0) {
+        return {
+          sourceCitations: [],
+          confidence: 0,
+          method: 'not-found'
+        };
+      }
+      
+      const citations: SourceCitation[] = matches.map(match => {
+        const textItems = getTextItemsInRange(
+          match.chunk,
+          match.chunk.charStart + match.matchIndex,
+          match.chunk.charStart + match.matchIndex + match.matchLength
+        );
+        
+        const bounds = calculateBoundingBox(textItems);
+        
+        return {
+          id: `citation-${Date.now()}-${Math.random()}`,
+          page: match.chunk.page,
+          coordinates: bounds,
+          sourceText: extractedText,
+          context: extractContextFromChunk(match.chunk, match.matchIndex, match.matchLength),
+          confidence: match.confidence
+        };
+      });
+      
+      return {
+        sourceCitations: citations,
+        confidence: citations[0]?.confidence || 0,
+        method: 'exact-match'
+      };
+    }
+    
+    // Fallback: extract on-demand (old behavior)
     const pagesToSearch = pageNumber ? [pageNumber] : await getAllPageNumbers(pdfFile);
     const allMatches: SourceCitation[] = [];
 
-    for (const page of pagesToSearch.slice(0, 5)) { // Limit to 5 pages for performance
+    for (const page of pagesToSearch.slice(0, 5)) {
       const { items: textItems } = await extractTextWithCoordinates(pdfFile, page);
 
-      // Try exact match first
       const exactMatches = findExactMatches(extractedText, textItems, page);
       if (exactMatches.length > 0) {
         return {
@@ -54,12 +96,10 @@ export async function detectSourceCitations(
         };
       }
 
-      // Try fuzzy matching
       const fuzzyMatches = findFuzzyMatches(extractedText, textItems, page);
       allMatches.push(...fuzzyMatches);
     }
 
-    // Return top matches
     const topMatches = allMatches
       .sort((a, b) => b.confidence - a.confidence)
       .slice(0, 3);
@@ -229,3 +269,21 @@ function extractContextFromItems(
 
   return context;
 }
+
+function extractContextFromChunk(
+  chunk: PageChunk,
+  matchIndex: number,
+  matchLength: number,
+  contextChars: number = 100
+): string {
+  const start = Math.max(0, matchIndex - contextChars);
+  const end = Math.min(chunk.text.length, matchIndex + matchLength + contextChars);
+  
+  let context = chunk.text.substring(start, end);
+  
+  if (start > 0) context = '...' + context;
+  if (end < chunk.text.length) context = context + '...';
+  
+  return context;
+}
+

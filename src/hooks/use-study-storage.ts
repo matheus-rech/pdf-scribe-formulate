@@ -2,6 +2,9 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ExtractionEntry } from "@/pages/Index";
+import { processFullPDF } from "@/lib/pdfChunking";
+import { createSemanticChunks } from "@/lib/semanticChunking";
+import { detectSections } from "@/lib/sectionDetection";
 
 interface Study {
   id: string;
@@ -12,6 +15,7 @@ interface Study {
   total_pages: number;
   created_at: string;
   updated_at: string;
+  pdf_chunks?: any;
 }
 
 export const useStudyStorage = (email: string | null) => {
@@ -45,7 +49,23 @@ export const useStudyStorage = (email: string | null) => {
         .from('study-pdfs')
         .getPublicUrl(fileName);
 
-      // Create study record
+      // Pre-process PDF
+      toast.info("Processing PDF text...");
+      
+      const processingResult = await processFullPDF(pdfFile, (current, total) => {
+        console.log(`Processing page ${current}/${total}`);
+      });
+      
+      const semanticChunks = createSemanticChunks(processingResult.pageChunks);
+      const sections = detectSections(processingResult.pageChunks);
+      
+      const pdfChunks = {
+        ...processingResult,
+        semanticChunks,
+        sections
+      };
+
+      // Create study record with chunks
       const { data, error } = await supabase
         .from("studies")
         .insert({
@@ -54,14 +74,15 @@ export const useStudyStorage = (email: string | null) => {
           pdf_name: pdfFile.name,
           pdf_url: publicUrl,
           total_pages: totalPages,
-        })
+          pdf_chunks: pdfChunks as any
+        } as any)
         .select()
         .single();
 
       if (error) throw error;
 
       setCurrentStudy(data);
-      toast.success("Study created and PDF uploaded");
+      toast.success("Study created and PDF processed");
       return data;
     } catch (error: any) {
       console.error("Error creating study:", error);

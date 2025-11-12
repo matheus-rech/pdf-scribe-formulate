@@ -21,6 +21,7 @@ interface TraceLogProps {
   onClearSourceHighlights?: () => void;
   onJumpToCitation?: (citation: SourceCitation) => void;
   pdfFile?: File | null;
+  currentStudy?: any;
 }
 
 export const TraceLog = ({ 
@@ -31,7 +32,8 @@ export const TraceLog = ({
   onHighlightSources,
   onClearSourceHighlights,
   onJumpToCitation,
-  pdfFile
+  pdfFile,
+  currentStudy
 }: TraceLogProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
@@ -162,10 +164,13 @@ export const TraceLog = ({
     toast.info("Detecting and validating source...");
     
     try {
+      const preProcessedChunks = currentStudy?.pdf_chunks?.pageChunks;
+      
       const detection = await detectSourceCitations(
         entry.text,
         pdfFile,
-        entry.page
+        entry.page,
+        preProcessedChunks
       );
       
       if (detection.sourceCitations.length > 0) {
@@ -198,13 +203,16 @@ export const TraceLog = ({
     toast.info("Detecting and validating sources for all extractions...");
     let detected = 0;
     
+    const preProcessedChunks = currentStudy?.pdf_chunks?.pageChunks;
+    
     for (const extraction of extractions) {
       if (!extraction.sourceCitations || extraction.sourceCitations.length === 0) {
         try {
           const detection = await detectSourceCitations(
             extraction.text,
             pdfFile,
-            extraction.page
+            extraction.page,
+            preProcessedChunks
           );
           
           if (detection.sourceCitations.length > 0) {

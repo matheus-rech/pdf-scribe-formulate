@@ -9,7 +9,7 @@ import { FileText, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useStudyStorage } from "@/hooks/use-study-storage";
-import type { SourceCitation } from "@/lib/citationDetector";
+import { detectSourceCitations, type SourceCitation } from "@/lib/citationDetector";
 import { AuditReportDialog } from "@/components/AuditReportDialog";
 import { BatchRevalidationDialog } from "@/components/BatchRevalidationDialog";
 
@@ -364,6 +364,7 @@ const Index = () => {
           onClearSourceHighlights={handleClearSourceHighlights}
           onJumpToCitation={handleJumpToCitation}
           pdfFile={pdfFile}
+          currentStudy={currentStudy}
         />
       </div>
     </div>
