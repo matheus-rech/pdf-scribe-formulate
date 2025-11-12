@@ -13,6 +13,7 @@ import { useStudyStorage } from "@/hooks/use-study-storage";
 import { detectSourceCitations, type SourceCitation } from "@/lib/citationDetector";
 import { AuditReportDialog } from "@/components/AuditReportDialog";
 import { BatchRevalidationDialog } from "@/components/BatchRevalidationDialog";
+import { ExportDialog } from "@/components/ExportDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface ExtractionEntry {
@@ -437,6 +438,12 @@ const Index = () => {
               extractions={extractions}
               onUpdateExtractions={handleBatchUpdateExtractions}
             />
+            {currentStudy && (
+              <ExportDialog
+                studyId={currentStudy.id}
+                studyName={currentStudy.name}
+              />
+            )}
           </div>
         </div>
         <TraceLog
