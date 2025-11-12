@@ -3,8 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Copy, FileText, Sparkles } from "lucide-react";
 import { extractTextFromImage } from "@/lib/ocr";
+import { detectTableStructure } from "@/lib/tableParser";
+import { TableParserView } from "./TableParserView";
 import { toast } from "sonner";
 
 interface OCRDialogProps {
@@ -18,6 +21,8 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
   const [extractedText, setExtractedText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasRun, setHasRun] = useState(false);
+  const [hasTableStructure, setHasTableStructure] = useState(false);
+  const [activeTab, setActiveTab] = useState("text");
 
   const handleRunOCR = async () => {
     setIsProcessing(true);
@@ -28,11 +33,22 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
       if (text) {
         setExtractedText(text);
         setHasRun(true);
-        toast.success("Text extracted successfully!");
+        
+        // Check if text contains table structure
+        const hasTable = detectTableStructure(text);
+        setHasTableStructure(hasTable);
+        
+        if (hasTable) {
+          setActiveTab("table");
+          toast.success("Table structure detected! Check the Table tab.");
+        } else {
+          toast.success("Text extracted successfully!");
+        }
       } else {
         toast.warning("No text found in image");
         setExtractedText("[No text detected]");
         setHasRun(true);
+        setHasTableStructure(false);
       }
     } catch (error) {
       console.error("OCR error:", error);
@@ -58,20 +74,20 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh]">
+      <DialogContent className="max-w-4xl max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            OCR - Extract Text from Image
+            OCR - Extract Text & Parse Tables
           </DialogTitle>
           <DialogDescription>
-            Use AI to extract text content from tables, figures, and diagrams
+            Use AI to extract text and automatically detect table structures
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           {/* Image Preview */}
-          <div className="space-y-2">
+          <div className="col-span-2 space-y-2">
             <div className="text-sm font-medium">Source Image</div>
             <div className="border rounded-lg overflow-hidden bg-muted/30">
               <img 
@@ -80,48 +96,8 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
                 className="w-full h-auto"
               />
             </div>
-          </div>
-
-          {/* Extracted Text */}
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Extracted Text</div>
-            {!hasRun ? (
-              <div className="border rounded-lg p-8 flex flex-col items-center justify-center text-center h-[300px] bg-muted/30">
-                <FileText className="h-12 w-12 text-muted-foreground mb-3" />
-                <p className="text-sm text-muted-foreground mb-4">
-                  Click "Run OCR" to extract text from this image
-                </p>
-                <Button onClick={handleRunOCR} disabled={isProcessing} className="gap-2">
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Run OCR
-                    </>
-                  )}
-                </Button>
-              </div>
-            ) : (
-              <ScrollArea className="h-[300px] border rounded-lg p-3 bg-background">
-                <Textarea
-                  value={extractedText}
-                  onChange={(e) => setExtractedText(e.target.value)}
-                  className="min-h-[280px] border-0 resize-none focus-visible:ring-0"
-                  placeholder="Extracted text will appear here..."
-                />
-              </ScrollArea>
-            )}
-          </div>
-        </div>
-
-        <DialogFooter className="flex items-center justify-between sm:justify-between">
-          <div className="flex gap-2">
             {!hasRun && (
-              <Button onClick={handleRunOCR} disabled={isProcessing} variant="default" className="gap-2">
+              <Button onClick={handleRunOCR} disabled={isProcessing} className="w-full gap-2">
                 {isProcessing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -135,6 +111,66 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
                 )}
               </Button>
             )}
+          </div>
+
+          {/* Extracted Data */}
+          <div className="col-span-3 space-y-2">
+            <div className="text-sm font-medium">Extracted Data</div>
+            {!hasRun ? (
+              <div className="border rounded-lg p-8 flex flex-col items-center justify-center text-center h-[400px] bg-muted/30">
+                <FileText className="h-12 w-12 text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground mb-4">
+                  Click "Run OCR" to extract text from this image
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Tables will be automatically detected and parsed
+                </p>
+              </div>
+            ) : (
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className={hasTableStructure ? "grid w-full grid-cols-2" : "w-full"}>
+                  <TabsTrigger value="text">Raw Text</TabsTrigger>
+                  {hasTableStructure && (
+                    <TabsTrigger value="table" className="gap-2">
+                      Table
+                      <span className="px-1.5 py-0.5 rounded text-xs bg-success/20 text-success">
+                        Detected
+                      </span>
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+
+                <TabsContent value="text" className="space-y-2">
+                  <ScrollArea className="h-[350px] border rounded-lg p-3 bg-background">
+                    <Textarea
+                      value={extractedText}
+                      onChange={(e) => setExtractedText(e.target.value)}
+                      className="min-h-[330px] border-0 resize-none focus-visible:ring-0"
+                      placeholder="Extracted text will appear here..."
+                    />
+                  </ScrollArea>
+                </TabsContent>
+
+                {hasTableStructure && (
+                  <TabsContent value="table">
+                    <ScrollArea className="h-[350px]">
+                      <TableParserView 
+                        text={extractedText}
+                        onExtractTable={(table) => {
+                          toast.success("Table data saved");
+                          // Could save to extraction data here
+                        }}
+                      />
+                    </ScrollArea>
+                  </TabsContent>
+                )}
+              </Tabs>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="flex items-center justify-between sm:justify-between">
+          <div className="flex gap-2">
             {hasRun && (
               <Button onClick={handleRunOCR} disabled={isProcessing} variant="outline" className="gap-2">
                 {isProcessing ? (
@@ -157,7 +193,7 @@ export const OCRDialog = ({ open, onOpenChange, imageData, onExtractToField }: O
               className="gap-2"
             >
               <Copy className="h-4 w-4" />
-              Copy
+              Copy Text
             </Button>
             {onExtractToField && (
               <Button

@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { Sparkles, Image as ImageIcon, FileText, Zap } from "lucide-react";
+import { Sparkles, Image as ImageIcon, FileText, Zap, Table } from "lucide-react";
 
 export const OCRInfoCard = () => {
   return (
@@ -10,13 +10,13 @@ export const OCRInfoCard = () => {
         </div>
         <div className="flex-1">
           <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
-            <span>AI-Powered OCR</span>
+            <span>AI-Powered OCR & Table Parser</span>
             <span className="text-xs px-2 py-0.5 rounded bg-success/10 text-success border border-success/20">
               New
             </span>
           </h3>
           <p className="text-xs text-muted-foreground mb-3">
-            Extract text from captured images including tables, figures, and charts using on-device AI
+            Extract text from images and automatically detect & parse table structures to JSON/CSV
           </p>
           
           <div className="space-y-2">
@@ -38,6 +38,13 @@ export const OCRInfoCard = () => {
               <FileText className="h-4 w-4 text-accent mt-0.5 shrink-0" />
               <div>
                 <span className="font-medium">Extract text</span> and copy to form fields
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 text-xs">
+              <Table className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">Auto-parse tables</span> to JSON/CSV format with preview
               </div>
             </div>
 
