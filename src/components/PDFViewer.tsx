@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Upload, ChevronLeft, ChevronRight, Box, Camera, FileText, Search as SearchIcon, FileDown } from "lucide-react";
+import { Upload, ChevronLeft, ChevronRight, Box, Camera, FileText, Search as SearchIcon, FileDown, Paintbrush } from "lucide-react";
 import { toast } from "sonner";
 import { Viewer, Worker } from '@react-pdf-viewer/core';
 import { highlightPlugin, Trigger } from '@react-pdf-viewer/highlight';
@@ -11,7 +11,9 @@ import type { RenderHighlightContentProps, RenderHighlightsProps } from '@react-
 import type { ExtractionEntry } from "@/pages/Index";
 import { extractAnnotationsFromPDF, type PDFAnnotation } from "@/lib/annotationParser";
 import { AnnotationImportDialog } from "./AnnotationImportDialog";
+import { DrawingToolbar } from "./DrawingToolbar";
 import * as pdfjsLib from "pdfjs-dist";
+import { Canvas as FabricCanvas, PencilBrush, Rect, Circle, IText } from "fabric";
 
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/highlight/lib/styles/index.css';
@@ -61,6 +63,16 @@ export const PDFViewer = ({
   const [isLoadingAnnotations, setIsLoadingAnnotations] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  
+  // Drawing mode states
+  const [drawingMode, setDrawingMode] = useState(false);
+  const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
+  const [drawingTool, setDrawingTool] = useState<"select" | "pen" | "rectangle" | "circle" | "text" | "eraser">("pen");
+  const [drawingColor, setDrawingColor] = useState("#ef4444");
+  const [strokeWidth, setStrokeWidth] = useState(3);
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyStep, setHistoryStep] = useState(-1);
 
   // Extract text from PDF when file loads
   useEffect(() => {
@@ -105,6 +117,68 @@ export const PDFViewer = ({
       URL.revokeObjectURL(url);
     };
   }, [file]);
+
+  // Initialize Fabric.js canvas for drawing
+  useEffect(() => {
+    if (!drawingMode || !drawingCanvasRef.current) {
+      if (fabricCanvas) {
+        fabricCanvas.dispose();
+        setFabricCanvas(null);
+      }
+      return;
+    }
+
+    const canvas = new FabricCanvas(drawingCanvasRef.current, {
+      width: 800,
+      height: 1000,
+      isDrawingMode: false,
+    });
+
+    // Initialize brush
+    const brush = new PencilBrush(canvas);
+    brush.color = drawingColor;
+    brush.width = strokeWidth;
+    canvas.freeDrawingBrush = brush;
+
+    setFabricCanvas(canvas);
+    toast.success("Drawing mode activated!");
+
+    // Track history for undo/redo
+    canvas.on('object:added', () => {
+      if (!canvas.isDrawingMode) {
+        const json = canvas.toJSON();
+        setHistory(prev => {
+          const newHistory = prev.slice(0, historyStep + 1);
+          return [...newHistory, json];
+        });
+        setHistoryStep(prev => prev + 1);
+      }
+    });
+
+    return () => {
+      canvas.dispose();
+    };
+  }, [drawingMode]);
+
+  // Update drawing tool
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    fabricCanvas.isDrawingMode = drawingTool === "pen";
+    
+    if (drawingTool === "pen" && fabricCanvas.freeDrawingBrush) {
+      fabricCanvas.freeDrawingBrush.color = drawingColor;
+      fabricCanvas.freeDrawingBrush.width = strokeWidth;
+    } else if (drawingTool === "eraser") {
+      fabricCanvas.isDrawingMode = true;
+      if (fabricCanvas.freeDrawingBrush) {
+        fabricCanvas.freeDrawingBrush.color = "#ffffff";
+        fabricCanvas.freeDrawingBrush.width = strokeWidth * 3;
+      }
+    } else if (drawingTool === "select") {
+      fabricCanvas.isDrawingMode = false;
+    }
+  }, [drawingTool, drawingColor, strokeWidth, fabricCanvas]);
 
   // Highlight plugin configuration
   const renderHighlightContent = (props: RenderHighlightContentProps) => {
@@ -175,6 +249,113 @@ export const PDFViewer = ({
 
   const searchPluginInstance = searchPlugin();
   const { ShowSearchPopover } = searchPluginInstance;
+
+  // Drawing tool handlers
+  const handleDrawingToolChange = (tool: typeof drawingTool) => {
+    setDrawingTool(tool);
+
+    if (!fabricCanvas) return;
+
+    if (tool === "rectangle") {
+      const rect = new Rect({
+        left: 100,
+        top: 100,
+        fill: "transparent",
+        stroke: drawingColor,
+        strokeWidth: strokeWidth,
+        width: 150,
+        height: 100,
+      });
+      fabricCanvas.add(rect);
+      fabricCanvas.setActiveObject(rect);
+    } else if (tool === "circle") {
+      const circle = new Circle({
+        left: 100,
+        top: 100,
+        fill: "transparent",
+        stroke: drawingColor,
+        strokeWidth: strokeWidth,
+        radius: 50,
+      });
+      fabricCanvas.add(circle);
+      fabricCanvas.setActiveObject(circle);
+    } else if (tool === "text") {
+      const text = new IText("Add text...", {
+        left: 100,
+        top: 100,
+        fill: drawingColor,
+        fontSize: 20,
+        fontFamily: "Arial",
+      });
+      fabricCanvas.add(text);
+      fabricCanvas.setActiveObject(text);
+      text.enterEditing();
+    }
+  };
+
+  const handleClearDrawing = () => {
+    if (!fabricCanvas) return;
+    fabricCanvas.clear();
+    setHistory([]);
+    setHistoryStep(-1);
+    toast.success("Annotations cleared");
+  };
+
+  const handleUndo = () => {
+    if (!fabricCanvas || historyStep <= 0) return;
+    const previousState = history[historyStep - 1];
+    fabricCanvas.loadFromJSON(previousState, () => {
+      fabricCanvas.renderAll();
+      setHistoryStep(prev => prev - 1);
+    });
+  };
+
+  const handleRedo = () => {
+    if (!fabricCanvas || historyStep >= history.length - 1) return;
+    const nextState = history[historyStep + 1];
+    fabricCanvas.loadFromJSON(nextState, () => {
+      fabricCanvas.renderAll();
+      setHistoryStep(prev => prev + 1);
+    });
+  };
+
+  const handleSaveAnnotations = async () => {
+    if (!fabricCanvas || !activeField) {
+      toast.error("Please select a field before saving annotations");
+      return;
+    }
+
+    try {
+      // Convert canvas to image
+      const dataUrl = fabricCanvas.toDataURL({
+        format: 'png',
+        quality: 1,
+        multiplier: 1,
+      });
+
+      onExtraction({
+        id: `extraction-${Date.now()}`,
+        fieldName: activeField,
+        text: "[Annotated region]",
+        page: currentPage,
+        coordinates: {
+          x: 0,
+          y: 0,
+          width: fabricCanvas.width || 800,
+          height: fabricCanvas.height || 1000,
+        },
+        method: "manual",
+        timestamp: new Date(),
+        imageData: dataUrl,
+      });
+
+      toast.success(`Annotations saved to ${activeField}`);
+      handleClearDrawing();
+    } catch (error) {
+      console.error("Error saving annotations:", error);
+      toast.error("Failed to save annotations");
+    }
+  };
 
   // Handle text selection from the PDF
   const handleTextSelection = () => {
@@ -433,6 +614,7 @@ export const PDFViewer = ({
             onClick={() => {
               setRegionMode(!regionMode);
               setImageMode(false);
+              setDrawingMode(false);
             }}
             disabled={!file}
             className="gap-2"
@@ -446,12 +628,27 @@ export const PDFViewer = ({
             onClick={() => {
               setImageMode(!imageMode);
               setRegionMode(false);
+              setDrawingMode(false);
             }}
             disabled={!file}
             className="gap-2"
           >
             <Camera className="h-4 w-4" />
             Image
+          </Button>
+          <Button
+            variant={drawingMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setDrawingMode(!drawingMode);
+              setRegionMode(false);
+              setImageMode(false);
+            }}
+            disabled={!file}
+            className="gap-2"
+          >
+            <Paintbrush className="h-4 w-4" />
+            Annotate
           </Button>
           <Button
             variant={searchOpen ? "default" : "outline"}
@@ -481,16 +678,23 @@ export const PDFViewer = ({
               <FileText className="h-3 w-3" />
               Active: {activeField}
             </div>
-            {(regionMode || imageMode) && (
+            {(regionMode || imageMode || drawingMode) && (
               <div className={`text-xs px-2 py-1 rounded-md border flex items-center gap-1 ${
                 imageMode 
                   ? "bg-extraction-image/10 text-extraction-image border-extraction-image/20"
+                  : drawingMode
+                  ? "bg-primary/10 text-primary border-primary/20"
                   : "bg-accent/10 text-accent border-accent/20"
               }`}>
                 {imageMode ? (
                   <>
                     <Camera className="h-3 w-3" />
                     Image Mode
+                  </>
+                ) : drawingMode ? (
+                  <>
+                    <Paintbrush className="h-3 w-3" />
+                    Annotation Mode
                   </>
                 ) : (
                   <>
@@ -518,6 +722,26 @@ export const PDFViewer = ({
           importResult={importResult}
           onImport={handleAnnotationsSelected}
         />
+
+        {/* Drawing Toolbar */}
+        {drawingMode && (
+          <div className="mb-4">
+            <DrawingToolbar
+              activeTool={drawingTool}
+              onToolChange={handleDrawingToolChange}
+              activeColor={drawingColor}
+              onColorChange={setDrawingColor}
+              strokeWidth={strokeWidth}
+              onStrokeWidthChange={setStrokeWidth}
+              onClear={handleClearDrawing}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              onSave={handleSaveAnnotations}
+              canUndo={historyStep > 0}
+              canRedo={historyStep < history.length - 1}
+            />
+          </div>
+        )}
         
         {!file ? (
           <div
@@ -550,6 +774,21 @@ export const PDFViewer = ({
                 />
               </div>
             </Worker>
+
+            {/* Drawing Canvas Overlay */}
+            {drawingMode && (
+              <div className="absolute top-0 left-0 w-full h-full pointer-events-auto z-10">
+                <canvas
+                  ref={drawingCanvasRef}
+                  className="absolute top-0 left-0"
+                  style={{ 
+                    border: '2px dashed hsl(var(--primary))',
+                    borderRadius: '0.5rem',
+                    backgroundColor: 'transparent',
+                  }}
+                />
+              </div>
+            )}
 
             {/* Selection box overlay */}
             {isSelecting && selectionBox && (
