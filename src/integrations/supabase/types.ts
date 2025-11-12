@@ -24,7 +24,7 @@ export type Database = {
           image_data: string | null
           method: string | null
           page: number | null
-          project_id: string
+          study_id: string
           text: string | null
           timestamp: string | null
         }
@@ -37,7 +37,7 @@ export type Database = {
           image_data?: string | null
           method?: string | null
           page?: number | null
-          project_id: string
+          study_id: string
           text?: string | null
           timestamp?: string | null
         }
@@ -50,27 +50,28 @@ export type Database = {
           image_data?: string | null
           method?: string | null
           page?: number | null
-          project_id?: string
+          study_id?: string
           text?: string | null
           timestamp?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "extractions_project_id_fkey"
-            columns: ["project_id"]
+            columns: ["study_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "studies"
             referencedColumns: ["id"]
           },
         ]
       }
-      projects: {
+      studies: {
         Row: {
           created_at: string
           email: string
           id: string
           name: string
           pdf_name: string | null
+          pdf_url: string | null
           total_pages: number | null
           updated_at: string
         }
@@ -80,6 +81,7 @@ export type Database = {
           id?: string
           name: string
           pdf_name?: string | null
+          pdf_url?: string | null
           total_pages?: number | null
           updated_at?: string
         }
@@ -89,6 +91,7 @@ export type Database = {
           id?: string
           name?: string
           pdf_name?: string | null
+          pdf_url?: string | null
           total_pages?: number | null
           updated_at?: string
         }

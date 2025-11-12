@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ExtractionForm } from "@/components/ExtractionForm";
 import { PDFViewer } from "@/components/PDFViewer";
 import { TraceLog } from "@/components/TraceLog";
-import { ProjectSelector } from "@/components/ProjectSelector";
+import { StudyManager } from "@/components/StudyManager";
 import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
 import { toast } from "sonner";
 import { FileText, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useProjectStorage } from "@/hooks/use-project-storage";
+import { useStudyStorage } from "@/hooks/use-study-storage";
 
 export interface ExtractionEntry {
   id: string;
@@ -31,83 +31,110 @@ const Index = () => {
   const [extractions, setExtractions] = useState<ExtractionEntry[]>([]);
   const [scale, setScale] = useState(1);
   const [pdfText, setPdfText] = useState<string>("");
-  const [recentProjects, setRecentProjects] = useState<any[]>([]);
+  const [studies, setStudies] = useState<any[]>([]);
+  const [isCreatingStudy, setIsCreatingStudy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
-    currentProject,
-    setCurrentProject,
-    createProject,
+    currentStudy,
+    setCurrentStudy,
+    createStudy,
     saveExtraction,
     loadExtractions,
-    getRecentProjects,
-  } = useProjectStorage(email);
+    getAllStudies,
+    loadStudyPdf,
+  } = useStudyStorage(email);
 
-  // Load recent projects when email is set
+  // Load all studies when email is set
   useEffect(() => {
     if (emailSet) {
-      getRecentProjects().then(setRecentProjects);
+      getAllStudies().then(setStudies);
     }
   }, [emailSet]);
 
-  // Auto-create project when PDF is loaded
+  // Load extractions when study is selected
   useEffect(() => {
-    if (pdfFile && !currentProject && emailSet) {
-      createProject(
-        `Study - ${new Date().toLocaleDateString()}`,
-        pdfFile.name,
-        totalPages
-      ).then((newProject) => {
-        if (newProject) {
-          getRecentProjects().then(setRecentProjects);
+    if (currentStudy) {
+      loadExtractions(currentStudy.id).then(setExtractions);
+    }
+  }, [currentStudy]);
+
+  // Create study and upload PDF when totalPages is available
+  useEffect(() => {
+    if (pdfFile && totalPages > 0 && isCreatingStudy && !currentStudy) {
+      const studyName = pdfFile.name.replace('.pdf', '') || `Study - ${new Date().toLocaleDateString()}`;
+      
+      createStudy(studyName, pdfFile, totalPages).then((newStudy) => {
+        if (newStudy) {
+          getAllStudies().then(setStudies);
+          setIsCreatingStudy(false);
         }
       });
     }
-  }, [pdfFile, totalPages, currentProject, emailSet]);
-
-  // Load extractions when project is set
-  useEffect(() => {
-    if (currentProject) {
-      loadExtractions(currentProject.id).then(setExtractions);
-    }
-  }, [currentProject]);
+  }, [pdfFile, totalPages, isCreatingStudy, currentStudy]);
 
   const handleExtraction = (entry: ExtractionEntry) => {
     setExtractions(prev => [...prev, entry]);
     
     // Save to database
-    if (currentProject) {
-      saveExtraction(currentProject.id, entry);
+    if (currentStudy) {
+      saveExtraction(currentStudy.id, entry);
     }
   };
 
   const handleSetEmail = () => {
     if (email.trim()) {
       setEmailSet(true);
-      toast.success("Email set");
+      toast.success("Email set - ready to add studies");
     } else {
       toast.error("Please enter an email");
     }
   };
 
-  const handleProjectSelect = async (projectId: string) => {
-    const project = recentProjects.find((p) => p.id === projectId);
-    if (project) {
-      setCurrentProject(project);
-      const loadedExtractions = await loadExtractions(projectId);
+  const handleStudySelect = async (studyId: string) => {
+    const study = studies.find((s) => s.id === studyId);
+    if (study) {
+      setCurrentStudy(study);
+      
+      // Load PDF from storage
+      const pdf = await loadStudyPdf(study);
+      if (pdf) {
+        setPdfFile(pdf);
+      }
+      
+      // Load extractions
+      const loadedExtractions = await loadExtractions(studyId);
       setExtractions(loadedExtractions);
-      setPdfFile(null); // Clear current PDF when switching projects
-      toast.success(`Loaded project: ${project.name}`);
+      
+      toast.success(`Loaded study: ${study.name}`);
     }
   };
 
-  const handleNewProject = () => {
-    setCurrentProject(null);
-    setPdfFile(null);
-    setExtractions([]);
-    setPdfText("");
-    setCurrentPage(1);
-    setTotalPages(0);
-    toast.info("Ready for new project");
+  const handleNewStudy = () => {
+    // Trigger file picker to upload new study PDF
+    fileInputRef.current?.click();
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      // Clear current state
+      setCurrentStudy(null);
+      setExtractions([]);
+      setPdfText("");
+      setCurrentPage(1);
+      setTotalPages(0);
+      
+      // Set new PDF - study creation will happen after PDF loads and totalPages is set
+      setPdfFile(file);
+      setIsCreatingStudy(true);
+      toast.info("Loading PDF...");
+    } else {
+      toast.error("Please select a valid PDF file");
+    }
+    
+    // Reset input
+    if (e.target) e.target.value = '';
   };
 
   const handleUpdateExtraction = (id: string, updates: Partial<ExtractionEntry>) => {
@@ -199,15 +226,13 @@ const Index = () => {
       {/* Left Panel - Form */}
       <div className="w-[35%] border-r border-border bg-card overflow-y-auto">
         <div className="p-6 border-b border-border bg-gradient-to-r from-primary/5 to-accent/5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <FileText className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-card-foreground">Clinical Study Extractor</h1>
-                <p className="text-sm text-muted-foreground">Structured data extraction from research PDFs</p>
-              </div>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <FileText className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-card-foreground">Meta-Analysis Extractor</h1>
+              <p className="text-sm text-muted-foreground">Study-centric data extraction for systematic reviews</p>
             </div>
           </div>
           
@@ -217,11 +242,19 @@ const Index = () => {
               {email}
             </div>
             
-            <ProjectSelector
-              projects={recentProjects}
-              currentProject={currentProject}
-              onProjectSelect={handleProjectSelect}
-              onNewProject={handleNewProject}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            
+            <StudyManager
+              studies={studies}
+              currentStudy={currentStudy}
+              onStudySelect={handleStudySelect}
+              onNewStudy={handleNewStudy}
             />
           </div>
         </div>

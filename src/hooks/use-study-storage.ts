@@ -1,24 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ExtractionEntry } from "@/pages/Index";
 
-interface Project {
+interface Study {
   id: string;
   email: string;
   name: string;
   pdf_name: string | null;
+  pdf_url: string | null;
   total_pages: number;
   created_at: string;
   updated_at: string;
 }
 
-export const useProjectStorage = (email: string | null) => {
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+export const useStudyStorage = (email: string | null) => {
+  const [currentStudy, setCurrentStudy] = useState<Study | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Create or get project
-  const createProject = async (name: string, pdfName: string, totalPages: number) => {
+  // Upload PDF to storage and create study record
+  const createStudy = async (name: string, pdfFile: File, totalPages: number) => {
     if (!email) {
       toast.error("Email required");
       return null;
@@ -26,12 +27,32 @@ export const useProjectStorage = (email: string | null) => {
 
     setIsLoading(true);
     try {
+      // Upload PDF to storage
+      const fileExt = pdfFile.name.split('.').pop();
+      const fileName = `${email}/${Date.now()}.${fileExt}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('study-pdfs')
+        .upload(fileName, pdfFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('study-pdfs')
+        .getPublicUrl(fileName);
+
+      // Create study record
       const { data, error } = await supabase
-        .from("projects")
+        .from("studies")
         .insert({
           email,
           name,
-          pdf_name: pdfName,
+          pdf_name: pdfFile.name,
+          pdf_url: publicUrl,
           total_pages: totalPages,
         })
         .select()
@@ -39,12 +60,12 @@ export const useProjectStorage = (email: string | null) => {
 
       if (error) throw error;
 
-      setCurrentProject(data);
-      toast.success("Project created");
+      setCurrentStudy(data);
+      toast.success("Study created and PDF uploaded");
       return data;
     } catch (error: any) {
-      console.error("Error creating project:", error);
-      toast.error("Failed to create project");
+      console.error("Error creating study:", error);
+      toast.error("Failed to create study");
       return null;
     } finally {
       setIsLoading(false);
@@ -52,10 +73,10 @@ export const useProjectStorage = (email: string | null) => {
   };
 
   // Save extraction
-  const saveExtraction = async (projectId: string, extraction: ExtractionEntry) => {
+  const saveExtraction = async (studyId: string, extraction: ExtractionEntry) => {
     try {
       const { error } = await supabase.from("extractions").insert({
-        project_id: projectId,
+        study_id: studyId,
         extraction_id: extraction.id,
         field_name: extraction.fieldName,
         text: extraction.text,
@@ -73,14 +94,14 @@ export const useProjectStorage = (email: string | null) => {
     }
   };
 
-  // Load extractions for project
-  const loadExtractions = async (projectId: string): Promise<ExtractionEntry[]> => {
+  // Load extractions for study
+  const loadExtractions = async (studyId: string): Promise<ExtractionEntry[]> => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from("extractions")
         .select("*")
-        .eq("project_id", projectId)
+        .eq("study_id", studyId)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
@@ -104,36 +125,52 @@ export const useProjectStorage = (email: string | null) => {
     }
   };
 
-  // Get recent projects for email
-  const getRecentProjects = async () => {
+  // Get all studies for this meta-analysis
+  const getAllStudies = async () => {
     if (!email) return [];
 
     setIsLoading(true);
     try {
       const { data, error } = await supabase
-        .from("projects")
+        .from("studies")
         .select("*")
         .eq("email", email)
-        .order("updated_at", { ascending: false })
-        .limit(10);
+        .order("updated_at", { ascending: false });
 
       if (error) throw error;
       return data;
     } catch (error: any) {
-      console.error("Error loading projects:", error);
+      console.error("Error loading studies:", error);
       return [];
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Load a study's PDF from storage
+  const loadStudyPdf = async (study: Study): Promise<File | null> => {
+    if (!study.pdf_url) return null;
+
+    try {
+      const response = await fetch(study.pdf_url);
+      const blob = await response.blob();
+      const file = new File([blob], study.pdf_name || 'study.pdf', { type: 'application/pdf' });
+      return file;
+    } catch (error) {
+      console.error("Error loading PDF:", error);
+      toast.error("Failed to load study PDF");
+      return null;
+    }
+  };
+
   return {
-    currentProject,
-    setCurrentProject,
+    currentStudy,
+    setCurrentStudy,
     isLoading,
-    createProject,
+    createStudy,
     saveExtraction,
     loadExtractions,
-    getRecentProjects,
+    getAllStudies,
+    loadStudyPdf,
   };
 };
