@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2, Check, AlertCircle, Save, Cloud, CloudOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2, Check, AlertCircle, Save, Cloud, CloudOff, Download } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { Card } from "./ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -639,27 +639,119 @@ export const ExtractionForm = ({
     return `${hours}h ago`;
   };
 
+  const exportAsJSON = () => {
+    const exportData = {
+      formData,
+      studyArms,
+      indications,
+      interventions,
+      mortalityData,
+      mrsData,
+      complications,
+      predictors,
+      currentStep,
+      validationResults,
+      exportDate: new Date().toISOString()
+    };
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `extraction-${studyId || 'data'}-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("Exported as JSON");
+  };
+
+  const exportAsCSV = () => {
+    const flattenObject = (obj: any, prefix = ''): any => {
+      return Object.keys(obj).reduce((acc: any, key) => {
+        const value = obj[key];
+        const newKey = prefix ? `${prefix}.${key}` : key;
+        
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          Object.assign(acc, flattenObject(value, newKey));
+        } else if (Array.isArray(value)) {
+          acc[newKey] = JSON.stringify(value);
+        } else {
+          acc[newKey] = value ?? '';
+        }
+        return acc;
+      }, {});
+    };
+
+    const flatData = flattenObject({
+      ...formData,
+      studyArms: studyArms,
+      indications: indications,
+      interventions: interventions,
+      mortalityData: mortalityData,
+      mrsData: mrsData,
+      complications: complications,
+      predictors: predictors
+    });
+    
+    const headers = Object.keys(flatData);
+    const values = Object.values(flatData);
+    
+    const csvContent = [
+      headers.join(','),
+      values.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    ].join('\n');
+    
+    const dataBlob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `extraction-${studyId || 'data'}-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("Exported as CSV");
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Save Status Indicator */}
+        {/* Save Status Indicator and Export Buttons */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {getSaveStatusIcon()}
             <span>{getSaveStatusText()}</span>
           </div>
-          {studyId && (
+          <div className="flex items-center gap-2">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              onClick={saveFormData}
-              disabled={saveStatus === 'saving'}
-              className="h-7 text-xs"
+              onClick={exportAsJSON}
+              className="h-7 text-xs gap-1"
             >
-              <Save className="h-3 w-3 mr-1" />
-              Save Now
+              <Download className="h-3 w-3" />
+              JSON
             </Button>
-          )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportAsCSV}
+              className="h-7 text-xs gap-1"
+            >
+              <Download className="h-3 w-3" />
+              CSV
+            </Button>
+            {studyId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={saveFormData}
+                disabled={saveStatus === 'saving'}
+                className="h-7 text-xs"
+              >
+                <Save className="h-3 w-3 mr-1" />
+                Save Now
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Step Indicator */}
