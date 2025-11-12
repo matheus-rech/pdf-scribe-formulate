@@ -268,6 +268,7 @@ const Index = () => {
           pdfLoaded={!!pdfFile}
           onExtraction={handleExtraction}
           pdfText={pdfText}
+          studyId={currentStudy?.id}
         />
       </div>
 
