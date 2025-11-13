@@ -19,6 +19,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import type { ImperativePanelHandle } from "react-resizable-panels";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface ExtractionEntry {
   id: string;
@@ -372,8 +373,9 @@ const Index = () => {
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <ResizablePanelGroup direction="horizontal">
+    <TooltipProvider>
+      <div className="flex h-screen bg-background overflow-hidden">
+        <ResizablePanelGroup direction="horizontal">
         {/* Left Panel - Form */}
         <ResizablePanel
           ref={leftPanelRef}
@@ -456,6 +458,28 @@ const Index = () => {
           </div>
         </ResizablePanel>
 
+        {/* Collapsed Left Panel Indicator */}
+        {leftPanelCollapsed && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => leftPanelRef.current?.expand()}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-50 h-24 w-8 rounded-none rounded-r-md border-r border-border bg-card hover:bg-muted shadow-sm"
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <ChevronRight className="h-4 w-4" />
+                  <span className="text-[10px] font-medium writing-mode-vertical">Form</span>
+                </div>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Expand Form Panel</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         <ResizableHandle withHandle className="hover:bg-primary/20 transition-colors" />
 
         {/* Center Panel - PDF Viewer */}
@@ -485,6 +509,28 @@ const Index = () => {
         </ResizablePanel>
 
         <ResizableHandle withHandle className="hover:bg-primary/20 transition-colors" />
+
+        {/* Collapsed Right Panel Indicator */}
+        {rightPanelCollapsed && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => rightPanelRef.current?.expand()}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-50 h-24 w-8 rounded-none rounded-l-md border-l border-border bg-card hover:bg-muted shadow-sm"
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="text-[10px] font-medium writing-mode-vertical">Trace</span>
+                </div>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p>Expand Trace Log Panel</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         {/* Right Panel - Trace Log */}
         <ResizablePanel
@@ -549,6 +595,7 @@ const Index = () => {
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
+    </TooltipProvider>
   );
 };
 
