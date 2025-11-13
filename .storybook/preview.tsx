@@ -1,5 +1,7 @@
 import type { Preview } from "@storybook/react";
 import { withThemeByClassName } from "@storybook/addon-themes";
+import { TooltipProvider } from "../src/components/ui/tooltip";
+import { RouterDecorator } from "./decorators/RouterDecorator";
 import "../src/index.css";
 
 const preview: Preview = {
@@ -32,6 +34,12 @@ const preview: Preview = {
       },
       defaultTheme: "light",
     }),
+    RouterDecorator,
+    (Story) => (
+      <TooltipProvider>
+        <Story />
+      </TooltipProvider>
+    ),
   ],
 };
 
