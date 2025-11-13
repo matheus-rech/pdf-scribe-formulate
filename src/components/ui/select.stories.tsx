@@ -23,7 +23,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default = {
+export const Default: Story = {
   render: () => (
     <Select>
       <SelectTrigger className="w-[180px]">
@@ -38,9 +38,9 @@ export const Default = {
       </SelectContent>
     </Select>
   ),
-} as Story;
+};
 
-export const WithGroups = {
+export const WithGroups: Story = {
   render: () => (
     <Select>
       <SelectTrigger className="w-[200px]">
@@ -63,9 +63,9 @@ export const WithGroups = {
       </SelectContent>
     </Select>
   ),
-} as Story;
+};
 
-export const WithDisabledOptions = {
+export const WithDisabledOptions: Story = {
   render: () => (
     <Select>
       <SelectTrigger className="w-[180px]">
@@ -84,9 +84,9 @@ export const WithDisabledOptions = {
       </SelectContent>
     </Select>
   ),
-} as Story;
+};
 
-export const WithDefaultValue = {
+export const WithDefaultValue: Story = {
   render: () => (
     <Select defaultValue="medium">
       <SelectTrigger className="w-[180px]">
@@ -100,9 +100,9 @@ export const WithDefaultValue = {
       </SelectContent>
     </Select>
   ),
-} as Story;
+};
 
-export const UserRoles = {
+export const UserRoles: Story = {
   render: () => (
     <Select>
       <SelectTrigger className="w-[200px]">
@@ -116,9 +116,9 @@ export const UserRoles = {
       </SelectContent>
     </Select>
   ),
-} as Story;
+};
 
-export const Countries = {
+export const Countries: Story = {
   render: () => (
     <Select>
       <SelectTrigger className="w-[240px]">
@@ -173,9 +173,9 @@ export const InForm = {
       </div>
     </div>
   ),
-} as Story;
+};
 
-export const MultiSection = {
+export const MultiSection: Story = {
   render: () => (
     <Select>
       <SelectTrigger className="w-[250px]">
@@ -206,4 +206,4 @@ export const MultiSection = {
       </SelectContent>
     </Select>
   ),
-} as Story;
+};
