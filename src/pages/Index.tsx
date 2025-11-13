@@ -454,6 +454,7 @@ const Index = () => {
               onExtraction={handleExtraction}
               pdfText={pdfText}
               studyId={currentStudy?.id}
+              studyName={currentStudy?.name}
             />
           </div>
         </ResizablePanel>
