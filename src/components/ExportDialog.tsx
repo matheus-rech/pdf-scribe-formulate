@@ -31,11 +31,12 @@ import {
 interface ExportDialogProps {
   studyId: string;
   studyName: string;
+  children?: React.ReactNode;
 }
 
 type ExportFormat = "json" | "csv" | "excel";
 
-export const ExportDialog = ({ studyId, studyName }: ExportDialogProps) => {
+export const ExportDialog = ({ studyId, studyName, children }: ExportDialogProps) => {
   const [format, setFormat] = useState<ExportFormat>("csv");
   const [isExporting, setIsExporting] = useState(false);
   const [open, setOpen] = useState(false);
@@ -166,15 +167,17 @@ export const ExportDialog = ({ studyId, studyName }: ExportDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="relative">
-          <Download className="h-4 w-4 mr-2" />
-          Export Data
-          {activeFilterCount > 0 && (
-            <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center">
-              {activeFilterCount}
-            </Badge>
-          )}
-        </Button>
+        {children || (
+          <Button variant="outline" size="sm" className="relative">
+            <Download className="h-4 w-4 mr-2" />
+            Export Data
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>

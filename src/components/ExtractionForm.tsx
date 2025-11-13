@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2, Check, AlertCircle, Save, Cloud, CloudOff, Download, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Plus, Trash2, Loader2, Check, AlertCircle, Save, Cloud, CloudOff, Download, AlertTriangle, FileDown } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { Card } from "./ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,7 @@ import { ReviewerSettingsDialog } from "./ReviewerSettingsDialog";
 import { ExtractionMethodInfo } from "./ExtractionMethodInfo";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Settings2, Info } from "lucide-react";
+import { ExportDialog } from "./ExportDialog";
 
 interface ExtractionFormProps {
   activeField: string | null;
@@ -30,6 +31,7 @@ interface ExtractionFormProps {
   onExtraction: (entry: ExtractionEntry) => void;
   pdfText?: string;
   studyId?: string;
+  studyName?: string;
 }
 
 interface StudyArm {
@@ -96,7 +98,8 @@ export const ExtractionForm = ({
   pdfLoaded,
   onExtraction,
   pdfText,
-  studyId
+  studyId,
+  studyName
 }: ExtractionFormProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<Record<string, string>>({});
@@ -2200,9 +2203,23 @@ export const ExtractionForm = ({
             <ChevronRight className="h-4 w-4" />
           </Button>
         ) : (
-          <Button className="gap-2">
-            Save to Google Sheets
-          </Button>
+          studyId && studyName ? (
+            <ExportDialog studyId={studyId} studyName={studyName}>
+              <Button className="gap-2" onClick={async () => {
+                setSaveStatus('saving');
+                await saveFormData();
+                toast.success('Form data saved successfully');
+              }}>
+                <FileDown className="h-4 w-4" />
+                Save & Export
+              </Button>
+            </ExportDialog>
+          ) : (
+            <Button className="gap-2" disabled>
+              <FileDown className="h-4 w-4" />
+              Save & Export
+            </Button>
+          )
         )}
       </div>
       
