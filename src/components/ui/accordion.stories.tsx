@@ -15,6 +15,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Single = {
+  args: {},
   render: () => (
     <Accordion type="single" collapsible className="w-full">
       <AccordionItem value="item-1">
@@ -37,9 +38,10 @@ export const Single = {
       </AccordionItem>
     </Accordion>
   ),
-} as Story;
+};
 
 export const Multiple = {
+  args: {},
   render: () => (
     <Accordion type="multiple" className="w-full">
       <AccordionItem value="item-1">
@@ -68,9 +70,10 @@ export const Multiple = {
       </AccordionItem>
     </Accordion>
   ),
-} as Story;
+};
 
 export const WithDefaultValue = {
+  args: {},
   render: () => (
     <Accordion type="single" defaultValue="item-2" collapsible className="w-full">
       <AccordionItem value="item-1">
@@ -93,9 +96,10 @@ export const WithDefaultValue = {
       </AccordionItem>
     </Accordion>
   ),
-} as Story;
+};
 
 export const WithBadges = {
+  args: {},
   render: () => (
     <Accordion type="single" collapsible className="w-full">
       <AccordionItem value="item-1">
@@ -137,9 +141,10 @@ export const WithBadges = {
       </AccordionItem>
     </Accordion>
   ),
-} as Story;
+};
 
 export const FAQ = {
+  args: {},
   render: () => (
     <Accordion type="single" collapsible className="w-full">
       <AccordionItem value="faq-1">
@@ -182,9 +187,10 @@ export const FAQ = {
       </AccordionItem>
     </Accordion>
   ),
-} as Story;
+};
 
 export const NestedContent = {
+  args: {},
   render: () => (
     <Accordion type="single" collapsible className="w-full">
       <AccordionItem value="item-1">
@@ -227,4 +233,4 @@ export const NestedContent = {
       </AccordionItem>
     </Accordion>
   ),
-} as Story;
+};
