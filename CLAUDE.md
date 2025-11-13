@@ -683,10 +683,12 @@ const [isOpen, setIsOpen] = useState(false);
 - [Radix UI](https://www.radix-ui.com)
 
 ### Project-Specific
-- Main application entry: `src/pages/Index.tsx` (19k+ lines - large monolithic component)
-- Core extraction form: `src/components/ExtractionForm.tsx` (86k+ lines - very large)
+- Main application entry: `src/pages/Index.tsx` (~555 lines)
+- Core extraction form: `src/components/ExtractionForm.tsx` (~2,242 lines - complex component)
 - PDF processing utilities: `src/lib/` directory
 - Edge function examples: `supabase/functions/extract-picot/`
+- State management context: `src/contexts/ExtractionFormContext.tsx`
+- Performance monitoring: `src/lib/performance.ts`
 
 ---
 
