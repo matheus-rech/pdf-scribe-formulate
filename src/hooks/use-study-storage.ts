@@ -71,7 +71,13 @@ export const useStudyStorage = (userId: string | null) => {
           upsert: false
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('PDF upload error:', uploadError);
+        toast.error(`Upload failed: ${uploadError.message}`);
+        throw uploadError;
+      }
+      
+      console.log(`✅ PDF uploaded successfully: ${fileName}`);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
@@ -139,7 +145,13 @@ export const useStudyStorage = (userId: string | null) => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Study creation error:', error);
+        toast.error(`Failed to create study: ${error.message}`);
+        throw error;
+      }
+      
+      console.log(`✅ Study created successfully: ${data.id}`);
 
       // Extract figures from PDF
       onProgress?.({
@@ -195,8 +207,12 @@ export const useStudyStorage = (userId: string | null) => {
             .insert(figureRecords as any);
 
           if (figureError) {
-            console.error('Error saving figures:', figureError);
-            toast.error('Figures extracted but failed to save to database');
+            console.error('❌ Error saving figures to database:', figureError);
+            toast.error(`Failed to save figures: ${figureError.message || 'Unknown error'}`);
+            // Check if it's an auth/RLS issue
+            if (figureError.message?.includes('policy') || figureError.message?.includes('permission')) {
+              toast.error('Authentication issue: Please ensure you are logged in');
+            }
           } else {
             console.log(`✅ Saved ${allFigures.length} figures to database`);
             
@@ -285,14 +301,18 @@ export const useStudyStorage = (userId: string | null) => {
             confidence_score: null
           }));
 
-          const { error: tableError } = await supabase
-            .from('pdf_tables' as any)
-            .insert(tableRecords as any);
+            const { error: tableError } = await supabase
+              .from('pdf_tables' as any)
+              .insert(tableRecords as any);
 
-          if (tableError) {
-            console.error('Error saving tables:', tableError);
-            toast.error('Tables extracted but failed to save to database');
-          } else {
+            if (tableError) {
+              console.error('❌ Error saving tables to database:', tableError);
+              toast.error(`Failed to save tables: ${tableError.message || 'Unknown error'}`);
+              // Check if it's an auth/RLS issue
+              if (tableError.message?.includes('policy') || tableError.message?.includes('permission')) {
+                toast.error('Authentication issue: Please ensure you are logged in');
+              }
+            } else {
             console.log(`✅ Saved ${allTables.length} tables to database`);
             
             // Enhance captions with AI
@@ -372,10 +392,9 @@ export const useStudyStorage = (userId: string | null) => {
             }
           }
         }
-      } catch (tableError) {
-        console.error('Error extracting tables:', tableError);
-        // Don't fail the entire study creation
-        toast.error('Failed to extract tables, but study was created');
+      } catch (tableError: any) {
+        console.error('❌ Error extracting tables:', tableError);
+        toast.error(`Table extraction failed: ${tableError?.message || 'Unknown error'}`);
       }
 
       // ========= Phase 3: Text Chunk Extraction with Coordinates =========
@@ -455,16 +474,19 @@ export const useStudyStorage = (userId: string | null) => {
             .insert(chunkRecords as any);
 
           if (chunksError) {
-            console.error('Error saving text chunks:', chunksError);
-            toast.error('Text chunks extracted but failed to save to database');
+            console.error('❌ Error saving text chunks to database:', chunksError);
+            toast.error(`Failed to save text chunks: ${chunksError.message || 'Unknown error'}`);
+            // Check if it's an auth/RLS issue
+            if (chunksError.message?.includes('policy') || chunksError.message?.includes('permission')) {
+              toast.error('Authentication issue: Please ensure you are logged in');
+            }
           } else {
             console.log(`✅ Saved ${allTextChunks.length} text chunks with citation provenance`);
           }
         }
-      } catch (chunkError) {
-        console.error('Error extracting text chunks:', chunkError);
-        // Don't fail the entire study creation
-        toast.error('Failed to extract text chunks, but study was created');
+      } catch (chunkError: any) {
+        console.error('❌ Error extracting text chunks:', chunkError);
+        toast.error(`Text chunk extraction failed: ${chunkError?.message || 'Unknown error'}`);
       }
 
       onProgress?.({
@@ -494,14 +516,39 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
-  // Save extraction
+  // Save extraction with automatic citation detection
   const saveExtraction = async (studyId: string, extraction: ExtractionEntry) => {
     if (!userId) {
-      toast.error("User ID required");
+      toast.error("User ID required - please log in");
       return;
     }
 
     try {
+      // Auto-detect source citations if not already provided
+      let sourceCitations = extraction.sourceCitations;
+      
+      if (!sourceCitations && extraction.text && currentStudy?.pdf_chunks) {
+        console.log('🔍 Auto-detecting citations for extraction:', extraction.fieldName);
+        const { detectSourceCitations } = await import('@/lib/citationDetector');
+        
+        // Use pre-processed chunks from the study
+        const preProcessedChunks = (currentStudy.pdf_chunks as any)?.pageChunks || [];
+        
+        if (preProcessedChunks.length > 0) {
+          const detectionResult = await detectSourceCitations(
+            extraction.text,
+            null as any, // We don't need the PDF file since we have pre-processed chunks
+            extraction.page,
+            preProcessedChunks
+          );
+          
+          if (detectionResult.sourceCitations.length > 0) {
+            sourceCitations = detectionResult.sourceCitations;
+            console.log(`✅ Auto-detected ${sourceCitations.length} citations with confidence ${detectionResult.confidence}`);
+          }
+        }
+      }
+
       const { error } = await supabase.from("extractions").insert({
         study_id: studyId,
         user_id: userId,
@@ -513,13 +560,19 @@ export const useStudyStorage = (userId: string | null) => {
         method: extraction.method,
         timestamp: extraction.timestamp.toISOString(),
         image_data: extraction.imageData || null,
-        source_citations: extraction.sourceCitations || null,
+        source_citations: sourceCitations || null,
       } as any);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error saving extraction to database:', error);
+        toast.error(`Failed to save extraction: ${error.message || 'Unknown error'}`);
+        throw error;
+      }
+      
+      console.log(`✅ Saved extraction: ${extraction.fieldName}`);
     } catch (error: any) {
       console.error("Error saving extraction:", error);
-      toast.error("Failed to save extraction");
+      toast.error(`Failed to save extraction: ${error?.message || 'Unknown error'}`);
     }
   };
 
@@ -651,6 +704,312 @@ export const useStudyStorage = (userId: string | null) => {
       return false;
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Re-extract figures and tables for a study
+  const reextractVisuals = async (
+    studyId: string,
+    onProgress?: (message: string) => void
+  ): Promise<{ figures: number; tables: number; success: boolean }> => {
+    if (!userId) {
+      toast.error("User ID required - please log in");
+      return { figures: 0, tables: 0, success: false };
+    }
+
+    try {
+      onProgress?.('Loading study PDF...');
+      
+      // Get study
+      const { data: study, error: studyError } = await supabase
+        .from("studies")
+        .select("*")
+        .eq("id", studyId)
+        .single();
+
+      if (studyError || !study) {
+        toast.error("Study not found");
+        return { figures: 0, tables: 0, success: false };
+      }
+
+      // Load PDF
+      const pdfFile = await loadStudyPdf(study);
+      if (!pdfFile) {
+        toast.error("Failed to load PDF file");
+        return { figures: 0, tables: 0, success: false };
+      }
+
+      let figuresCount = 0;
+      let tablesCount = 0;
+
+      // ===== Re-extract Figures =====
+      onProgress?.('Re-extracting figures...');
+      try {
+        const pdfDoc = await pdfjsLib.getDocument({
+          data: await pdfFile.arrayBuffer()
+        }).promise;
+
+        const { allFigures } = await extractAllFigures(
+          pdfDoc,
+          (current, total) => {
+            onProgress?.(`Extracting figures: page ${current}/${total}...`);
+          }
+        );
+
+        if (allFigures.length > 0) {
+          // Delete old figures first
+          await supabase
+            .from('pdf_figures' as any)
+            .delete()
+            .eq('study_id', studyId);
+
+          const figureRecords = allFigures.map(fig => ({
+            study_id: studyId,
+            user_id: userId,
+            page_number: fig.pageNum,
+            figure_id: fig.id,
+            data_url: fig.dataUrl,
+            width: fig.width,
+            height: fig.height,
+            x: fig.x,
+            y: fig.y,
+            bbox_width: fig.width,
+            bbox_height: fig.height,
+            extraction_method: fig.extractionMethod,
+            color_space: fig.metadata.colorSpace,
+            has_alpha: fig.metadata.hasAlpha,
+            data_length: fig.metadata.dataLength,
+            caption: fig.caption || null,
+            ai_enhanced: fig.aiEnhanced || false
+          }));
+
+          const { error: figureError } = await supabase
+            .from('pdf_figures' as any)
+            .insert(figureRecords as any);
+
+          if (figureError) {
+            console.error('Error saving re-extracted figures:', figureError);
+            toast.error(`Failed to save figures: ${figureError.message}`);
+          } else {
+            figuresCount = allFigures.length;
+            console.log(`✅ Re-extracted ${figuresCount} figures`);
+          }
+        }
+      } catch (figError: any) {
+        console.error('Error re-extracting figures:', figError);
+        toast.error(`Figure re-extraction failed: ${figError?.message}`);
+      }
+
+      // ===== Re-extract Tables =====
+      onProgress?.('Re-extracting tables...');
+      try {
+        const tablePdfDoc = await pdfjsLib.getDocument({
+          data: await pdfFile.arrayBuffer()
+        }).promise;
+
+        const { extractTablesFromPage } = await import('@/lib/pdfTableExtraction');
+        const allTables: any[] = [];
+
+        for (let pageNum = 1; pageNum <= tablePdfDoc.numPages; pageNum++) {
+          onProgress?.(`Extracting tables: page ${pageNum}/${tablePdfDoc.numPages}...`);
+          
+          const page = await tablePdfDoc.getPage(pageNum);
+          const tables = await extractTablesFromPage(page, pageNum);
+          allTables.push(...tables);
+        }
+
+        if (allTables.length > 0) {
+          // Delete old tables first
+          await supabase
+            .from('pdf_tables' as any)
+            .delete()
+            .eq('study_id', studyId);
+
+          const tableRecords = allTables.map((table: any) => ({
+            study_id: studyId,
+            user_id: userId,
+            table_id: table.id,
+            page_number: table.pageNum,
+            x: table.boundingBox.x,
+            y: table.boundingBox.y,
+            bbox_width: table.boundingBox.width,
+            bbox_height: table.boundingBox.height,
+            headers: table.headers,
+            rows: table.rows,
+            column_count: table.headers.length,
+            row_count: table.rows.length,
+            column_positions: table.columnPositions,
+            extraction_method: table.extractionMethod,
+            caption: table.caption || null,
+            ai_enhanced: false,
+            confidence_score: null
+          }));
+
+          const { error: tableError } = await supabase
+            .from('pdf_tables' as any)
+            .insert(tableRecords as any);
+
+          if (tableError) {
+            console.error('Error saving re-extracted tables:', tableError);
+            toast.error(`Failed to save tables: ${tableError.message}`);
+          } else {
+            tablesCount = allTables.length;
+            console.log(`✅ Re-extracted ${tablesCount} tables`);
+          }
+        }
+      } catch (tableError: any) {
+        console.error('Error re-extracting tables:', tableError);
+        toast.error(`Table re-extraction failed: ${tableError?.message}`);
+      }
+
+      onProgress?.('Re-extraction complete!');
+      
+      if (figuresCount > 0 || tablesCount > 0) {
+        toast.success(`Re-extracted ${figuresCount} figures and ${tablesCount} tables`);
+        return { figures: figuresCount, tables: tablesCount, success: true };
+      } else {
+        toast.info('No figures or tables found in this PDF');
+        return { figures: 0, tables: 0, success: true };
+      }
+    } catch (error: any) {
+      console.error('Error during re-extraction:', error);
+      toast.error(`Re-extraction failed: ${error?.message || 'Unknown error'}`);
+      return { figures: 0, tables: 0, success: false };
+    }
+  };
+
+  // Re-extract text chunks for a study
+  const reextractTextChunks = async (
+    studyId: string,
+    onProgress?: (message: string) => void
+  ): Promise<{ chunks: number; success: boolean }> => {
+    if (!userId) {
+      toast.error("User ID required - please log in");
+      return { chunks: 0, success: false };
+    }
+
+    try {
+      onProgress?.('Loading study PDF...');
+      
+      // Get study
+      const { data: study, error: studyError } = await supabase
+        .from("studies")
+        .select("*")
+        .eq("id", studyId)
+        .single();
+
+      if (studyError || !study) {
+        toast.error("Study not found");
+        return { chunks: 0, success: false };
+      }
+
+      // Load PDF
+      const pdfFile = await loadStudyPdf(study);
+      if (!pdfFile) {
+        toast.error("Failed to load PDF file");
+        return { chunks: 0, success: false };
+      }
+
+      let chunksCount = 0;
+
+      // ===== Re-extract Text Chunks =====
+      onProgress?.('Re-extracting text chunks with coordinates...');
+      try {
+        const chunkPdfDoc = await pdfjsLib.getDocument({
+          data: await pdfFile.arrayBuffer()
+        }).promise;
+
+        const { extractTextWithCoordinates } = await import('@/lib/textChunkIndexing');
+        
+        const allTextChunks: any[] = [];
+        let globalChunkIndex = 0;
+
+        // Get sections from study if available
+        const sections = (study.pdf_chunks as any)?.sections || [];
+
+        for (let pageNum = 1; pageNum <= chunkPdfDoc.numPages; pageNum++) {
+          onProgress?.(`Extracting text chunks: page ${pageNum}/${chunkPdfDoc.numPages}...`);
+          
+          const page = await chunkPdfDoc.getPage(pageNum);
+          const pageChunks = await extractTextWithCoordinates(page, pageNum, 0);
+
+          // Assign global indices and map to sections
+          pageChunks.forEach(chunk => {
+            chunk.chunkIndex = globalChunkIndex++;
+            
+            // Find section for this chunk
+            if (sections && chunk.charStart !== undefined) {
+              const section = sections.find(
+                (s: any) => chunk.charStart >= s.charStart && chunk.charEnd <= s.charEnd
+              );
+              if (section) {
+                chunk.sectionName = section.type;
+              }
+            }
+            
+            allTextChunks.push(chunk);
+          });
+        }
+
+        console.log(`📊 Text chunk re-extraction complete: Found ${allTextChunks.length} chunks`);
+
+        if (allTextChunks.length > 0) {
+          // Delete old chunks first
+          await supabase
+            .from('pdf_text_chunks' as any)
+            .delete()
+            .eq('study_id', studyId);
+
+          const chunkRecords = allTextChunks.map(chunk => ({
+            study_id: studyId,
+            user_id: userId,
+            chunk_index: chunk.chunkIndex,
+            page_number: chunk.pageNum,
+            text: chunk.text,
+            sentence_count: 1,
+            x: chunk.bbox.x,
+            y: chunk.bbox.y,
+            width: chunk.bbox.width,
+            height: chunk.bbox.height,
+            char_start: chunk.charStart,
+            char_end: chunk.charEnd,
+            section_name: chunk.sectionName || null,
+            font_name: chunk.fontName,
+            font_size: chunk.fontSize,
+            is_heading: chunk.isHeading,
+            is_bold: chunk.isBold
+          }));
+
+          const { error: chunksError } = await supabase
+            .from('pdf_text_chunks' as any)
+            .insert(chunkRecords as any);
+
+          if (chunksError) {
+            console.error('❌ Error saving re-extracted text chunks:', chunksError);
+            toast.error(`Failed to save text chunks: ${chunksError.message}`);
+          } else {
+            chunksCount = allTextChunks.length;
+            console.log(`✅ Re-extracted ${chunksCount} text chunks`);
+          }
+        }
+      } catch (chunkError: any) {
+        console.error('Error re-extracting text chunks:', chunkError);
+        toast.error(`Text chunk re-extraction failed: ${chunkError?.message}`);
+      }
+
+      onProgress?.('Re-extraction complete!');
+      
+      if (chunksCount > 0) {
+        toast.success(`Re-extracted ${chunksCount} text chunks`);
+        return { chunks: chunksCount, success: true };
+      } else {
+        toast.info('No text chunks found in this PDF');
+        return { chunks: 0, success: true };
+      }
+    } catch (error: any) {
+      console.error('Error during text chunk re-extraction:', error);
+      toast.error(`Re-extraction failed: ${error?.message || 'Unknown error'}`);
+      return { chunks: 0, success: false };
     }
   };
 
@@ -937,6 +1296,48 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
+  // Re-extract all (figures, tables, and text chunks) in one operation
+  const reextractAll = async (studyId: string, onProgress: (message: string) => void) => {
+    try {
+      onProgress('Starting comprehensive re-extraction...');
+      
+      // Run visual extraction first
+      onProgress('Re-extracting figures and tables...');
+      const visualResult = await reextractVisuals(studyId, onProgress);
+      
+      if (!visualResult.success) {
+        return { success: false, figures: 0, tables: 0, chunks: 0 };
+      }
+      
+      // Then extract text chunks
+      onProgress('Re-extracting text chunks...');
+      const chunksResult = await reextractTextChunks(studyId, onProgress);
+      
+      if (!chunksResult.success) {
+        return { 
+          success: false, 
+          figures: visualResult.figures, 
+          tables: visualResult.tables, 
+          chunks: 0 
+        };
+      }
+      
+      onProgress('Complete! All data re-extracted successfully');
+      toast.success(`Re-extracted ${visualResult.figures} figures, ${visualResult.tables} tables, and ${chunksResult.chunks} text chunks`);
+      
+      return {
+        success: true,
+        figures: visualResult.figures,
+        tables: visualResult.tables,
+        chunks: chunksResult.chunks
+      };
+    } catch (error: any) {
+      console.error('Error in comprehensive re-extraction:', error);
+      toast.error(`Re-extraction failed: ${error.message}`);
+      return { success: false, figures: 0, tables: 0, chunks: 0 };
+    }
+  };
+
   return {
     currentStudy,
     setCurrentStudy,
@@ -947,9 +1348,13 @@ export const useStudyStorage = (userId: string | null) => {
     getAllStudies,
     loadStudyPdf,
     reprocessStudy,
+    reextractVisuals,
+    reextractTextChunks,
+    reextractAll,
     bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
+    matchFigureCaptions,
     loadStudyFigures,
   };
 };

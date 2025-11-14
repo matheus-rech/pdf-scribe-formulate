@@ -147,9 +147,30 @@ export const TableExtractionPanel: React.FC<TableExtractionPanelProps> = ({
                 Loading tables...
               </div>
             ) : tables.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-8 text-muted-foreground space-y-4">
                 <Table2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No tables extracted from this document</p>
+                <div className="space-y-2">
+                  <p className="font-medium text-foreground">No tables extracted yet</p>
+                  <p className="text-sm">To extract tables from the PDF:</p>
+                </div>
+                <div className="text-left max-w-md mx-auto space-y-2 text-sm bg-muted/50 p-4 rounded-lg">
+                  <div className="flex gap-2">
+                    <span className="font-semibold text-primary">1.</span>
+                    <span>Navigate to a page with a table in the PDF viewer</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="font-semibold text-primary">2.</span>
+                    <span>Click the <strong>"Region"</strong> tool in the toolbar</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="font-semibold text-primary">3.</span>
+                    <span>Click and drag to select the table area</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="font-semibold text-primary">4.</span>
+                    <span>The extracted table will appear here</span>
+                  </div>
+                </div>
               </div>
             ) : (
               <ScrollArea className="h-[400px]">
