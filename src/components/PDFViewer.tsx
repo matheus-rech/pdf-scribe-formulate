@@ -52,6 +52,7 @@ interface PDFViewerProps {
   onBatchExtract?: (section: any) => void;
   isBatchExtracting?: boolean;
   onAnnotationsChange?: (annotations: any[]) => void;
+  initialAnnotations?: any[];
 }
 
 export const PDFViewer = ({
@@ -73,7 +74,8 @@ export const PDFViewer = ({
   studySections,
   onBatchExtract,
   isBatchExtracting = false,
-  onAnnotationsChange
+  onAnnotationsChange,
+  initialAnnotations = []
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
@@ -109,6 +111,8 @@ export const PDFViewer = ({
     hasAnnotation,
     getAllAnnotations,
     pageAnnotations,
+    restoreAnnotations,
+    clearAllAnnotations
   } = usePageAnnotations();
 
   const {
@@ -228,6 +232,20 @@ export const PDFViewer = ({
       onAnnotationsChange(getAllAnnotations());
     }
   }, [pageAnnotations, onAnnotationsChange, getAllAnnotations]);
+
+  // Restore initial annotations when study changes
+  useEffect(() => {
+    if (initialAnnotations && initialAnnotations.length > 0) {
+      console.log(`Restoring ${initialAnnotations.length} annotations`);
+      restoreAnnotations(initialAnnotations);
+      toast.success(`Loaded ${initialAnnotations.length} annotated pages`);
+    } else {
+      // Clear annotations when switching to a study with no annotations
+      if (pageAnnotations.size > 0) {
+        clearAllAnnotations();
+      }
+    }
+  }, [initialAnnotations]);
 
   // Load annotations for current page
   useEffect(() => {

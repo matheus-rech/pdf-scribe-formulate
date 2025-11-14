@@ -54,7 +54,9 @@ const Index = () => {
   const [isCreatingStudy, setIsCreatingStudy] = useState(false);
   const [highlightedSources, setHighlightedSources] = useState<SourceCitation[]>([]);
   const [pdfAnnotations, setPdfAnnotations] = useState<any[]>([]);
+  const [loadedAnnotations, setLoadedAnnotations] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const annotationSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Panel collapse states
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(() => {
@@ -97,6 +99,8 @@ const Index = () => {
     getAllStudies,
     loadStudyPdf,
     reprocessStudy,
+    savePageAnnotations,
+    loadPageAnnotations,
   } = useStudyStorage(userId);
 
   const [isReprocessing, setIsReprocessing] = useState(false);
@@ -185,6 +189,16 @@ const Index = () => {
       const pdf = await loadStudyPdf(study);
       if (pdf) {
         setPdfFile(pdf);
+      }
+      
+      // Load annotations for this study
+      const annotations = await loadPageAnnotations(studyId);
+      if (annotations && annotations.length > 0) {
+        setLoadedAnnotations(annotations);
+        toast.success(`Loaded study: ${study.name} (${annotations.length} pages annotated)`);
+      } else {
+        setLoadedAnnotations([]);
+        toast.success(`Loaded study: ${study.name}`);
       }
       
       // Load extractions
@@ -377,9 +391,25 @@ const Index = () => {
       });
     });
 
-    if (importCount > 0) {
+  if (importCount > 0) {
       toast.success(`Successfully imported ${importCount} annotation(s) to form fields`);
     }
+  };
+
+  // Auto-save annotations with debouncing
+  const handleAnnotationsChange = (annotations: any[]) => {
+    if (!currentStudy) return;
+
+    // Clear existing timeout
+    if (annotationSaveTimeoutRef.current) {
+      clearTimeout(annotationSaveTimeoutRef.current);
+    }
+
+    // Set new timeout to save after 2 seconds of inactivity
+    annotationSaveTimeoutRef.current = setTimeout(async () => {
+      await savePageAnnotations(currentStudy.id, annotations);
+      console.log("Auto-saved annotations");
+    }, 2000);
   };
 
   if (!user) {
@@ -528,7 +558,8 @@ const Index = () => {
             studySections={currentStudy?.pdf_chunks?.sections}
             onBatchExtract={handleBatchExtract}
             isBatchExtracting={isBatchExtracting}
-            onAnnotationsChange={setPdfAnnotations}
+            onAnnotationsChange={handleAnnotationsChange}
+            initialAnnotations={loadedAnnotations}
             />
           </div>
         </ResizablePanel>

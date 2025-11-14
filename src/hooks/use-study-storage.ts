@@ -5,6 +5,7 @@ import type { ExtractionEntry } from "@/pages/Index";
 import { processFullPDF } from "@/lib/pdfChunking";
 import { createSemanticChunks } from "@/lib/semanticChunking";
 import { detectSections } from "@/lib/sectionDetection";
+import type { PageAnnotation } from "@/hooks/usePageAnnotations";
 
 interface Study {
   id: string;
@@ -17,6 +18,7 @@ interface Study {
   created_at: string;
   updated_at: string;
   pdf_chunks?: any;
+  page_annotations?: any;
 }
 
 export const useStudyStorage = (userId: string | null) => {
@@ -284,6 +286,57 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
+  // Save page annotations to database
+  const savePageAnnotations = async (studyId: string, annotations: PageAnnotation[]) => {
+    if (!userId) {
+      console.error("User ID required to save annotations");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("studies")
+        .update({ 
+          page_annotations: annotations as any
+        })
+        .eq("id", studyId)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+      
+      console.log(`✅ Saved ${annotations.length} annotations for study ${studyId}`);
+    } catch (error: any) {
+      console.error("Error saving annotations:", error);
+      toast.error("Failed to save annotations");
+    }
+  };
+
+  // Load page annotations from database
+  const loadPageAnnotations = async (studyId: string): Promise<PageAnnotation[]> => {
+    if (!userId) {
+      console.error("User ID required to load annotations");
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("studies")
+        .select("page_annotations")
+        .eq("id", studyId)
+        .eq("user_id", userId)
+        .single();
+
+      if (error) throw error;
+      
+      const annotations = (data?.page_annotations || []) as unknown as PageAnnotation[];
+      console.log(`✅ Loaded ${annotations.length} annotations for study ${studyId}`);
+      return annotations;
+    } catch (error: any) {
+      console.error("Error loading annotations:", error);
+      return [];
+    }
+  };
+
   return {
     currentStudy,
     setCurrentStudy,
@@ -294,5 +347,7 @@ export const useStudyStorage = (userId: string | null) => {
     getAllStudies,
     loadStudyPdf,
     reprocessStudy,
+    savePageAnnotations,
+    loadPageAnnotations,
   };
 };
