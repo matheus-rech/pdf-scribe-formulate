@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ExtractionForm } from "@/components/ExtractionForm";
 import { PDFViewer } from "@/components/PDFViewer";
 import { TraceLog } from "@/components/TraceLog";
+import { FigureExtractionPanel } from "@/components/FigureExtractionPanel";
 import { StudyManager } from "@/components/StudyManager";
 import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
 import { SectionDetectionProgress } from "@/components/SectionDetectionProgress";
@@ -24,6 +25,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import type { ImperativePanelHandle } from "react-resizable-panels";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SearchResult } from "@/lib/pdfSearch";
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -111,6 +113,7 @@ const Index = () => {
 
   const [detectedSections, setDetectedSections] = useState<any[]>([]);
   const [showSectionProgress, setShowSectionProgress] = useState(false);
+  const [extractedFigures, setExtractedFigures] = useState<any[]>([]);
 
   const {
     currentStudy,
@@ -124,6 +127,7 @@ const Index = () => {
     bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
+    loadStudyFigures,
   } = useStudyStorage(userId);
 
   const [isReprocessing, setIsReprocessing] = useState(false);
@@ -164,6 +168,7 @@ const Index = () => {
   useEffect(() => {
     if (currentStudy) {
       loadExtractions(currentStudy.id).then(setExtractions);
+      loadStudyFigures(currentStudy.id).then(setExtractedFigures);
     }
   }, [currentStudy]);
 
@@ -235,6 +240,10 @@ const Index = () => {
       // Load extractions
       const loadedExtractions = await loadExtractions(studyId);
       setExtractions(loadedExtractions);
+      
+      // Load extracted figures
+      const figures = await loadStudyFigures(studyId);
+      setExtractedFigures(figures);
       
       toast.success(`Loaded study: ${study.name}`);
     }
@@ -720,21 +729,39 @@ const Index = () => {
             )}
               </div>
             </div>
-            <TraceLog
-              extractions={extractions}
-              onJumpToExtraction={handleJumpToExtraction}
-              onClearAll={() => setExtractions([])}
-              onUpdateExtraction={handleUpdateExtraction}
-              onHighlightSources={handleHighlightSources}
-              onClearSourceHighlights={handleClearSourceHighlights}
-              onJumpToCitation={handleJumpToCitation}
-              pdfFile={pdfFile}
-              currentStudy={currentStudy}
-              onSearchInPDF={handleSearchResults}
-              onHighlightSearchResult={handleHighlightSearchResult}
-              pdfDoc={pdfDocRef.current}
-              currentScale={scale}
-            />
+            <Tabs defaultValue="extractions" className="h-full flex flex-col">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="extractions">
+                  Extractions ({extractions.length})
+                </TabsTrigger>
+                <TabsTrigger value="figures">
+                  Figures ({extractedFigures.length})
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="extractions" className="flex-1 overflow-auto">
+                <TraceLog
+                  extractions={extractions}
+                  onJumpToExtraction={handleJumpToExtraction}
+                  onClearAll={() => setExtractions([])}
+                  onUpdateExtraction={handleUpdateExtraction}
+                  onHighlightSources={handleHighlightSources}
+                  onClearSourceHighlights={handleClearSourceHighlights}
+                  onJumpToCitation={handleJumpToCitation}
+                  pdfFile={pdfFile}
+                  currentStudy={currentStudy}
+                  onSearchInPDF={handleSearchResults}
+                  onHighlightSearchResult={handleHighlightSearchResult}
+                  pdfDoc={pdfDocRef.current}
+                  currentScale={scale}
+                />
+              </TabsContent>
+              <TabsContent value="figures" className="flex-1 overflow-auto">
+                <FigureExtractionPanel
+                  figures={extractedFigures}
+                  onPageNavigate={(pageNum) => setCurrentPage(pageNum)}
+                />
+              </TabsContent>
+            </Tabs>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
