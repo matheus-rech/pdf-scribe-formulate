@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Plus, Trash2 } from "lucide-react";
+import { MRSVisualization } from "@/components/MRSVisualization";
 
 interface MortalityData {
   id: string;
@@ -149,6 +150,11 @@ export const Step7Outcomes = ({
       </div>
 
       <h3 className="font-semibold text-base mt-6">Modified Rankin Scale (mRS)</h3>
+      
+      {mrsData.length > 0 && studyArms.length > 0 && (
+        <MRSVisualization mrsData={mrsData} studyArms={studyArms} />
+      )}
+      
       <div className="space-y-3">
         {mrsData.map((mrs) => (
           <Card key={mrs.id} className="p-4">
