@@ -157,7 +157,10 @@ export const ExtractionSettingsDialog = ({ open, onOpenChange }: ExtractionSetti
                 </div>
                 <Slider
                   value={[settings?.default_reviewers || 3]}
-                  onValueChange={(v) => updateSetting('default_reviewers', Math.min(v[0], enabledReviewerCount || 7))}
+                  onValueChange={(v) => {
+                    const val = Math.min(v[0], enabledReviewerCount || 7);
+                    updateSetting('default_reviewers', val);
+                  }}
                   min={settings?.min_reviewers || 1}
                   max={Math.min(settings?.max_reviewers || 7, enabledReviewerCount)}
                   step={1}
@@ -205,7 +208,11 @@ export const ExtractionSettingsDialog = ({ open, onOpenChange }: ExtractionSetti
                 </div>
                 <Slider
                   value={[(settings?.high_concordance_threshold_even || 0.8) * 100]}
-                  onValueChange={(v) => updateSetting('high_concordance_threshold_even', v[0] / 100)}
+                  onValueChange={(v) => {
+                    if (settings) {
+                      updateSetting('high_concordance_threshold_even', v[0] / 100);
+                    }
+                  }}
                   min={50}
                   max={100}
                   step={5}
@@ -223,7 +230,11 @@ export const ExtractionSettingsDialog = ({ open, onOpenChange }: ExtractionSetti
                 </div>
                 <Slider
                   value={[(settings?.high_concordance_threshold_odd || 0.66) * 100]}
-                  onValueChange={(v) => updateSetting('high_concordance_threshold_odd', v[0] / 100)}
+                  onValueChange={(v) => {
+                    if (settings) {
+                      updateSetting('high_concordance_threshold_odd', v[0] / 100);
+                    }
+                  }}
                   min={50}
                   max={100}
                   step={5}

@@ -300,16 +300,16 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label className="text-sm">
-                          Temperature: {reviewer.temperature.toFixed(2)}
+                          Temperature: {(reviewer.temperature || 0.7).toFixed(2)}
                         </Label>
                         <span className="text-xs text-muted-foreground">
-                          {reviewer.temperature < 0.3 ? 'Very Conservative' :
-                           reviewer.temperature < 0.6 ? 'Balanced' :
-                           reviewer.temperature < 0.9 ? 'Creative' : 'Very Creative'}
+                          {(reviewer.temperature || 0.7) < 0.3 ? 'Very Conservative' :
+                           (reviewer.temperature || 0.7) < 0.6 ? 'Balanced' :
+                           (reviewer.temperature || 0.7) < 0.9 ? 'Creative' : 'Very Creative'}
                         </span>
                       </div>
                       <Slider
-                        value={[reviewer.temperature]}
+                        value={[reviewer.temperature || 0.7]}
                         onValueChange={(value) => handleTemperatureChange(reviewer.id, value)}
                         min={0}
                         max={1}

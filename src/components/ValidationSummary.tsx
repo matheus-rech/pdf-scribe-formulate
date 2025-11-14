@@ -27,18 +27,18 @@ export const ValidationSummary = ({
   const filledFields = Object.keys(formData).filter(key => formData[key]?.trim());
   
   const validFields = validatedFields.filter(
-    field => validationResults[field].isValid && validationResults[field].confidence >= 80
+    field => validationResults[field]?.isValid && (validationResults[field]?.confidence ?? 0) >= 80
   );
   const warningFields = validatedFields.filter(
-    field => validationResults[field].confidence >= 50 && validationResults[field].confidence < 80
+    field => (validationResults[field]?.confidence ?? 0) >= 50 && (validationResults[field]?.confidence ?? 0) < 80
   );
   const invalidFields = validatedFields.filter(
-    field => !validationResults[field].isValid || validationResults[field].confidence < 50
+    field => !validationResults[field]?.isValid || (validationResults[field]?.confidence ?? 0) < 50
   );
 
   const overallScore = validatedFields.length > 0
     ? Math.round(
-        validatedFields.reduce((sum, field) => sum + validationResults[field].confidence, 0) / 
+        validatedFields.reduce((sum, field) => sum + (validationResults[field]?.confidence ?? 0), 0) / 
         validatedFields.length
       )
     : 0;
@@ -132,11 +132,11 @@ export const ValidationSummary = ({
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{field}</div>
                       <div className="text-muted-foreground text-[10px] line-clamp-1">
-                        {validationResults[field].issues.join(", ")}
+                        {validationResults[field]?.issues?.join(", ") || "Validation failed"}
                       </div>
                     </div>
                     <Badge variant="secondary" className="text-[10px] px-1 h-4 shrink-0">
-                      {validationResults[field].confidence}%
+                      {validationResults[field]?.confidence || 0}%
                     </Badge>
                   </div>
                 ))}
@@ -150,7 +150,7 @@ export const ValidationSummary = ({
                       </div>
                     </div>
                     <Badge variant="secondary" className="text-[10px] px-1 h-4 shrink-0">
-                      {validationResults[field].confidence}%
+                      {validationResults[field]?.confidence || 0}%
                     </Badge>
                   </div>
                 ))}
