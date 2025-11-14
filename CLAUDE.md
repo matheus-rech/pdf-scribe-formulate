@@ -98,15 +98,16 @@ import { exportToExcel } from "@/lib/exportData";
 ### TypeScript Configuration
 ```json
 {
-  "noImplicitAny": false,
-  "noUnusedParameters": false,
-  "noUnusedLocals": false,
-  "strictNullChecks": false,
+  "strict": true,
+  "noImplicitAny": true,
+  "noUnusedParameters": true,
+  "noUnusedLocals": true,
+  "strictNullChecks": true,
   "allowJs": true
 }
 ```
 
-**Note**: The project has lenient TypeScript settings. While types are encouraged, the codebase tolerates implicit `any` types. Focus on functional correctness over strict typing.
+**Note**: The project uses strict TypeScript settings. All code should avoid implicit `any` types, handle nulls explicitly, and remove unused locals and parameters. Focus on both functional correctness and strong typing.
 
 ### Component Patterns
 
@@ -625,7 +626,7 @@ const [isOpen, setIsOpen] = useState(false);
 4. **Maintain backward compatibility**: Consider existing stored data formats
 
 ### Code Review Checklist
-- [ ] TypeScript types defined (even if using `any` temporarily)
+- [ ] TypeScript types properly defined (strict mode - avoid `any` types)
 - [ ] Error handling implemented
 - [ ] Loading states shown to user
 - [ ] Toast notifications for user feedback
