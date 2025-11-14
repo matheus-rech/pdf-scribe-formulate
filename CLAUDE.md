@@ -104,6 +104,9 @@ import { exportToExcel } from "@/lib/exportData";
   "strictNullChecks": true,
   "allowJs": true
 }
+```
+
+**Note**: The project uses strict TypeScript settings. All code should avoid implicit `any` types, handle nulls explicitly, and remove unused locals and parameters. Focus on both functional correctness and strong typing.
 
 ### Component Patterns
 
