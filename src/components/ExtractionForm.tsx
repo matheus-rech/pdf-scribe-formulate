@@ -213,7 +213,7 @@ export const ExtractionForm = ({
     setStudyArms(studyArms.filter(arm => arm.id !== id));
   };
 
-  const updateArm = (id: string, field: keyof StudyArm, value: string) => {
+  const updateArm = (id: string, field: string, value: string) => {
     setStudyArms(studyArms.map(arm => 
       arm.id === id ? { ...arm, [field]: value } : arm
     ));
@@ -247,7 +247,7 @@ export const ExtractionForm = ({
     setInterventions(interventions.filter(int => int.id !== id));
   };
 
-  const updateIntervention = (id: string, field: keyof Intervention, value: string) => {
+  const updateIntervention = (id: string, field: string, value: string) => {
     setInterventions(interventions.map(int => 
       int.id === id ? { ...int, [field]: value } : int
     ));

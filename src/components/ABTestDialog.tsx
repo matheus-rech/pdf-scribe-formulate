@@ -45,7 +45,12 @@ export const ABTestDialog = ({ open, onOpenChange, onSuccess }: ABTestDialogProp
     traffic_split: 0.5
   });
 
-  const [variants, setVariants] = useState([
+  const [variants, setVariants] = useState<Array<{
+    variant_name: string;
+    model: string;
+    is_control: boolean;
+    template_id: string | null;
+  }>>([
     { variant_name: "Control", model: "google/gemini-2.5-flash", is_control: true, template_id: null },
     { variant_name: "Variant A", model: "openai/gpt-5-mini", is_control: false, template_id: null }
   ]);
@@ -318,7 +323,7 @@ export const ABTestDialog = ({ open, onOpenChange, onSuccess }: ABTestDialogProp
                       onValueChange={(value) => {
                         const newVariants = [...variants];
                         if (newVariants[index]) {
-                          newVariants[index].template_id = value === "none" ? null : value;
+                          newVariants[index].template_id = value === "none" ? null : (value as string);
                           setVariants(newVariants);
                         }
                       }}
