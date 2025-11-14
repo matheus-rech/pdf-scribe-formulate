@@ -1,6 +1,6 @@
-const CACHE_NAME = 'pdf-extraction-v1';
-const STATIC_CACHE = 'static-v1';
-const DYNAMIC_CACHE = 'dynamic-v1';
+const CACHE_NAME = 'pdf-extraction-v2';
+const STATIC_CACHE = 'static-v2';
+const DYNAMIC_CACHE = 'dynamic-v2';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -56,6 +56,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network-first for JS/CSS to avoid stale React code
+  if (request.destination === 'script' || request.destination === 'style') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          // Clone and cache the fresh response
+          const responseToCache = response.clone();
+          caches.open(DYNAMIC_CACHE)
+            .then((cache) => cache.put(request, responseToCache));
+          return response;
+        })
+        .catch(() => {
+          // Fallback to cache if offline
+          return caches.match(request);
+        })
+    );
+    return;
+  }
+
   // For navigation requests (HTML)
   if (request.mode === 'navigate') {
     event.respondWith(
@@ -65,7 +84,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first strategy for static assets
+  // Cache-first strategy for static assets (images, fonts, PDF worker)
   event.respondWith(
     caches.match(request)
       .then((cachedResponse) => {
@@ -83,10 +102,8 @@ self.addEventListener('fetch', (event) => {
             // Clone the response
             const responseToCache = response.clone();
 
-            // Cache static assets (JS, CSS, images, fonts)
+            // Cache static assets (images, fonts)
             if (
-              request.destination === 'script' ||
-              request.destination === 'style' ||
               request.destination === 'image' ||
               request.destination === 'font'
             ) {
