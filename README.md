@@ -159,7 +159,7 @@ npm run test:e2e:headed
 npm run lint
 ```
 
-**Known Issue**: The codebase currently has 351 linting issues (mostly `any` types). These are tracked for gradual improvement.
+**Known Issue**: The codebase currently has 351 linting issues (mostly `any` types). These are tracked for gradual improvement in [GitHub Issue #123: Linting Cleanup Roadmap](https://github.com/lovable-dev/pdf-scribe-formulate/issues/123). We aim to reduce linting issues by 50% each release; contributors are encouraged to reference this issue for progress and coordination.
 
 ## Project Structure
 
