@@ -98,15 +98,15 @@ import { exportToExcel } from "@/lib/exportData";
 ### TypeScript Configuration
 ```json
 {
-  "noImplicitAny": false,
-  "noUnusedParameters": false,
-  "noUnusedLocals": false,
-  "strictNullChecks": false,
+  "noImplicitAny": true,
+  "noUnusedParameters": true,
+  "noUnusedLocals": true,
+  "strictNullChecks": true,
   "allowJs": true
 }
 ```
 
-**Note**: The project has lenient TypeScript settings. While types are encouraged, the codebase tolerates implicit `any` types. Focus on functional correctness over strict typing.
+**Note**: The project uses strict TypeScript settings. All code should avoid implicit `any` types, handle nulls explicitly, and remove unused locals and parameters. Focus on both functional correctness and strong typing.
 
 ### Component Patterns
 
