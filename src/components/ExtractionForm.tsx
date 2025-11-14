@@ -24,6 +24,10 @@ import { Settings2, Info } from "lucide-react";
 import { ExportDialog } from "./ExportDialog";
 import { ReviewerCountSelector } from "./ReviewerCountSelector";
 import { ExtractionSettingsDialog } from "./ExtractionSettingsDialog";
+import { Step1StudyId } from "./extraction-steps/Step1StudyId";
+import { Step2PICOT } from "./extraction-steps/Step2PICOT";
+import { Step3Baseline } from "./extraction-steps/Step3Baseline";
+import { Step4Imaging } from "./extraction-steps/Step4Imaging";
 
 interface ExtractionFormProps {
   activeField: string | null;
@@ -156,6 +160,14 @@ export const ExtractionForm = ({
   const handleFieldChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
+
+  const handleBulkUpdate = (updates: Record<string, string>) => {
+    setFormData(prev => ({ ...prev, ...updates }));
+  };
+
+  // Check if inclusion criteria met for disabling subsequent steps
+  const inclusionMet = formData["inclusion-met"];
+  const isExtractionStopped = inclusionMet === "false";
 
   const handleNext = () => {
     if (currentStep < STEPS.length) {
@@ -1177,598 +1189,42 @@ export const ExtractionForm = ({
           <div className="space-y-4">
             {/* STEP 1: STUDY ID */}
             {currentStep === 1 && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="citation">Full Citation (Required)</Label>
-                  <div className="flex gap-2 items-start">
-                    <Textarea
-                      id="citation"
-                      value={getFieldValue("citation")}
-                      onChange={(e) => handleFieldChange("citation", e.target.value)}
-                      onFocus={() => onFieldFocus("citation")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={`flex-1 ${activeField === "citation" ? "ring-2 ring-primary" : ""} ${getFieldClassName("citation")}`}
-                      rows={3}
-                      placeholder="Paste citation or title..."
-                    />
-                    {renderValidationButton("citation")}
-                  </div>
-                  {renderConfidenceBadge("citation")}
-                  {renderValidationAlert("citation")}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="doi">DOI</Label>
-                    <Input
-                      id="doi"
-                      value={getFieldValue("doi")}
-                      onChange={(e) => handleFieldChange("doi", e.target.value)}
-                      onFocus={() => onFieldFocus("doi")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "doi" ? "ring-2 ring-primary" : ""}
-                      placeholder="10.1000/xyz123"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="pmid">PMID</Label>
-                    <Input
-                      id="pmid"
-                      value={getFieldValue("pmid")}
-                      onChange={(e) => handleFieldChange("pmid", e.target.value)}
-                      onFocus={() => onFieldFocus("pmid")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "pmid" ? "ring-2 ring-primary" : ""}
-                      placeholder="12345678"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="journal">Journal</Label>
-                    <Input
-                      id="journal"
-                      value={getFieldValue("journal")}
-                      onChange={(e) => handleFieldChange("journal", e.target.value)}
-                      onFocus={() => onFieldFocus("journal")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "journal" ? "ring-2 ring-primary" : ""}
-                      placeholder="Journal name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="year">Year</Label>
-                    <Input
-                      id="year"
-                      type="number"
-                      value={getFieldValue("year")}
-                      onChange={(e) => handleFieldChange("year", e.target.value)}
-                      onFocus={() => onFieldFocus("year")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "year" ? "ring-2 ring-primary" : ""}
-                      placeholder="2024"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="country">Country</Label>
-                    <Input
-                      id="country"
-                      value={getFieldValue("country")}
-                      onChange={(e) => handleFieldChange("country", e.target.value)}
-                      onFocus={() => onFieldFocus("country")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "country" ? "ring-2 ring-primary" : ""}
-                      placeholder="Study location"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="centers">Centers (e.g., Single, Multi)</Label>
-                  <Input
-                    id="centers"
-                    value={getFieldValue("centers")}
-                    onChange={(e) => handleFieldChange("centers", e.target.value)}
-                    onFocus={() => onFieldFocus("centers")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "centers" ? "ring-2 ring-primary" : ""}
-                    placeholder="Single-center or Multi-center"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="funding">Funding Sources</Label>
-                  <Textarea
-                    id="funding"
-                    value={getFieldValue("funding")}
-                    onChange={(e) => handleFieldChange("funding", e.target.value)}
-                    onFocus={() => onFieldFocus("funding")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "funding" ? "ring-2 ring-primary" : ""}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="conflicts">Conflicts of Interest</Label>
-                  <Textarea
-                    id="conflicts"
-                    value={getFieldValue("conflicts")}
-                    onChange={(e) => handleFieldChange("conflicts", e.target.value)}
-                    onFocus={() => onFieldFocus("conflicts")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "conflicts" ? "ring-2 ring-primary" : ""}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="registration">Trial Registration ID</Label>
-                  <Input
-                    id="registration"
-                    value={getFieldValue("registration")}
-                    onChange={(e) => handleFieldChange("registration", e.target.value)}
-                    onFocus={() => onFieldFocus("registration")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "registration" ? "ring-2 ring-primary" : ""}
-                    placeholder="e.g., NCT12345678"
-                  />
-                </div>
-              </>
+              <Step1StudyId
+                formData={formData}
+                onUpdate={handleBulkUpdate}
+                onFieldFocus={onFieldFocus}
+              />
             )}
 
             {/* STEP 2: PICO-T */}
             {currentStep === 2 && (
-              <>
-                <Card className="p-4 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
-                  <div className="flex items-start gap-3">
-                    <Sparkles className="h-5 w-5 text-primary mt-0.5" />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-sm mb-1">AI-Powered PICO-T Generation</h3>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Let AI analyze your PDF and generate the PICO-T framework automatically
-                      </p>
-                      <Button 
-                        size="sm" 
-                        className="gap-2"
-                        onClick={handleGeneratePICOT}
-                        disabled={!pdfLoaded || isExtractingPICOT}
-                      >
-                        {isExtractingPICOT ? (
-                          <>
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Analyzing...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="h-3 w-3" />
-                            Generate PICO-T Summary
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-
-                <div className="space-y-2">
-                  <Label htmlFor="population">Population</Label>
-                  <div className="flex gap-2">
-                    <Textarea
-                      id="population"
-                      value={getFieldValue("population")}
-                      onChange={(e) => handleFieldChange("population", e.target.value)}
-                      onFocus={() => onFieldFocus("population")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={`flex-1 ${activeField === "population" ? "ring-2 ring-primary" : ""} ${getFieldClassName("population")}`}
-                      rows={3}
-                    />
-                    {renderValidationButton("population")}
-                  </div>
-                  {renderValidationAlert("population")}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="intervention">Intervention</Label>
-                  <div className="flex gap-2">
-                    <Textarea
-                      id="intervention"
-                      value={getFieldValue("intervention")}
-                      onChange={(e) => handleFieldChange("intervention", e.target.value)}
-                      onFocus={() => onFieldFocus("intervention")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={`flex-1 ${activeField === "intervention" ? "ring-2 ring-primary" : ""} ${getFieldClassName("intervention")}`}
-                      rows={3}
-                    />
-                    {renderValidationButton("intervention")}
-                  </div>
-                  {renderValidationAlert("intervention")}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="comparator">Comparator</Label>
-                  <div className="flex gap-2">
-                    <Textarea
-                      id="comparator"
-                      value={getFieldValue("comparator")}
-                      onChange={(e) => handleFieldChange("comparator", e.target.value)}
-                      onFocus={() => onFieldFocus("comparator")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={`flex-1 ${activeField === "comparator" ? "ring-2 ring-primary" : ""} ${getFieldClassName("comparator")}`}
-                      rows={2}
-                    />
-                    {renderValidationButton("comparator")}
-                  </div>
-                  {renderValidationAlert("comparator")}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="outcomes">Outcomes Measured</Label>
-                  <div className="flex gap-2">
-                    <Textarea
-                      id="outcomes"
-                      value={getFieldValue("outcomes")}
-                      onChange={(e) => handleFieldChange("outcomes", e.target.value)}
-                      onFocus={() => onFieldFocus("outcomes")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={`flex-1 ${activeField === "outcomes" ? "ring-2 ring-primary" : ""} ${getFieldClassName("outcomes")}`}
-                      rows={3}
-                    />
-                    {renderValidationButton("outcomes")}
-                  </div>
-                  {renderValidationAlert("outcomes")}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="timing">Timing/Follow-up</Label>
-                    <Input
-                      id="timing"
-                      value={getFieldValue("timing")}
-                      onChange={(e) => handleFieldChange("timing", e.target.value)}
-                      onFocus={() => onFieldFocus("timing")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "timing" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="studyType">Study Type (e.g., RCT, Cohort)</Label>
-                    <Input
-                      id="studyType"
-                      value={getFieldValue("studyType")}
-                      onChange={(e) => handleFieldChange("studyType", e.target.value)}
-                      onFocus={() => onFieldFocus("studyType")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "studyType" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="inclusionMet">Inclusion Criteria Met?</Label>
-                  <Select
-                    value={getFieldValue("inclusionMet")}
-                    onValueChange={(value) => handleFieldChange("inclusionMet", value)}
-                  >
-                    <SelectTrigger className={activeField === "inclusionMet" ? "ring-2 ring-primary" : ""}>
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes</SelectItem>
-                      <SelectItem value="no">No (Stop Extraction)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              <Step2PICOT
+                formData={formData}
+                onUpdate={handleBulkUpdate}
+                onFieldFocus={onFieldFocus}
+                pdfText={pdfText}
+                studyId={studyId}
+              />
             )}
 
             {/* STEP 3: BASELINE */}
             {currentStep === 3 && (
-              <>
-                <h3 className="font-semibold text-base mt-4">Sample Size</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="totalN">Total N (Required)</Label>
-                    <Input
-                      id="totalN"
-                      type="number"
-                      value={getFieldValue("totalN")}
-                      onChange={(e) => handleFieldChange("totalN", e.target.value)}
-                      onFocus={() => onFieldFocus("totalN")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "totalN" ? "ring-2 ring-primary" : ""}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="surgicalN">Surgical N</Label>
-                    <Input
-                      id="surgicalN"
-                      type="number"
-                      value={getFieldValue("surgicalN")}
-                      onChange={(e) => handleFieldChange("surgicalN", e.target.value)}
-                      onFocus={() => onFieldFocus("surgicalN")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "surgicalN" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="controlN">Control N</Label>
-                    <Input
-                      id="controlN"
-                      type="number"
-                      value={getFieldValue("controlN")}
-                      onChange={(e) => handleFieldChange("controlN", e.target.value)}
-                      onFocus={() => onFieldFocus("controlN")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "controlN" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                </div>
-
-                <h3 className="font-semibold text-base mt-6">Age Demographics</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="ageMean">Age Mean</Label>
-                    <Input
-                      id="ageMean"
-                      type="number"
-                      step="0.1"
-                      value={getFieldValue("ageMean")}
-                      onChange={(e) => handleFieldChange("ageMean", e.target.value)}
-                      onFocus={() => onFieldFocus("ageMean")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "ageMean" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ageSD">Age SD</Label>
-                    <Input
-                      id="ageSD"
-                      type="number"
-                      step="0.1"
-                      value={getFieldValue("ageSD")}
-                      onChange={(e) => handleFieldChange("ageSD", e.target.value)}
-                      onFocus={() => onFieldFocus("ageSD")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "ageSD" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="ageMedian">Age Median</Label>
-                    <Input
-                      id="ageMedian"
-                      type="number"
-                      step="0.1"
-                      value={getFieldValue("ageMedian")}
-                      onChange={(e) => handleFieldChange("ageMedian", e.target.value)}
-                      onFocus={() => onFieldFocus("ageMedian")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "ageMedian" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ageIQRLower">Age IQR (Lower/Q1)</Label>
-                    <Input
-                      id="ageIQRLower"
-                      type="number"
-                      step="0.1"
-                      value={getFieldValue("ageIQRLower")}
-                      onChange={(e) => handleFieldChange("ageIQRLower", e.target.value)}
-                      onFocus={() => onFieldFocus("ageIQRLower")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "ageIQRLower" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ageIQRUpper">Age IQR (Upper/Q3)</Label>
-                    <Input
-                      id="ageIQRUpper"
-                      type="number"
-                      step="0.1"
-                      value={getFieldValue("ageIQRUpper")}
-                      onChange={(e) => handleFieldChange("ageIQRUpper", e.target.value)}
-                      onFocus={() => onFieldFocus("ageIQRUpper")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "ageIQRUpper" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                </div>
-
-                <h3 className="font-semibold text-base mt-6">Gender</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="maleN">Male N</Label>
-                    <Input
-                      id="maleN"
-                      type="number"
-                      value={getFieldValue("maleN")}
-                      onChange={(e) => handleFieldChange("maleN", e.target.value)}
-                      onFocus={() => onFieldFocus("maleN")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "maleN" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="femaleN">Female N</Label>
-                    <Input
-                      id="femaleN"
-                      type="number"
-                      value={getFieldValue("femaleN")}
-                      onChange={(e) => handleFieldChange("femaleN", e.target.value)}
-                      onFocus={() => onFieldFocus("femaleN")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "femaleN" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                </div>
-
-                <h3 className="font-semibold text-base mt-6">Baseline Clinical Scores</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="prestrokeMRS">Pre-stroke mRS</Label>
-                    <Input
-                      id="prestrokeMRS"
-                      type="number"
-                      step="0.1"
-                      value={getFieldValue("prestrokeMRS")}
-                      onChange={(e) => handleFieldChange("prestrokeMRS", e.target.value)}
-                      onFocus={() => onFieldFocus("prestrokeMRS")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "prestrokeMRS" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nihssMean">NIHSS Mean/Median</Label>
-                    <Input
-                      id="nihssMean"
-                      type="number"
-                      step="0.1"
-                      value={getFieldValue("nihssMean")}
-                      onChange={(e) => handleFieldChange("nihssMean", e.target.value)}
-                      onFocus={() => onFieldFocus("nihssMean")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "nihssMean" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="gcsMean">GCS Mean/Median</Label>
-                    <Input
-                      id="gcsMean"
-                      type="number"
-                      step="0.1"
-                      value={getFieldValue("gcsMean")}
-                      onChange={(e) => handleFieldChange("gcsMean", e.target.value)}
-                      onFocus={() => onFieldFocus("gcsMean")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "gcsMean" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                </div>
-              </>
+              <Step3Baseline
+                formData={formData}
+                onUpdate={handleBulkUpdate}
+                onFieldFocus={onFieldFocus}
+                disabled={isExtractionStopped}
+              />
             )}
 
             {/* STEP 4: IMAGING */}
             {currentStep === 4 && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="vascularTerritory">Vascular Territory</Label>
-                  <Input
-                    id="vascularTerritory"
-                    value={getFieldValue("vascularTerritory")}
-                    onChange={(e) => handleFieldChange("vascularTerritory", e.target.value)}
-                    onFocus={() => onFieldFocus("vascularTerritory")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "vascularTerritory" ? "ring-2 ring-primary" : ""}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="infarctVolume">Infarct Volume</Label>
-                    <Input
-                      id="infarctVolume"
-                      type="number"
-                      step="0.1"
-                      value={getFieldValue("infarctVolume")}
-                      onChange={(e) => handleFieldChange("infarctVolume", e.target.value)}
-                      onFocus={() => onFieldFocus("infarctVolume")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "infarctVolume" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="strokeVolumeCerebellum">Stroke Volume (Cerebellum)</Label>
-                    <Input
-                      id="strokeVolumeCerebellum"
-                      value={getFieldValue("strokeVolumeCerebellum")}
-                      onChange={(e) => handleFieldChange("strokeVolumeCerebellum", e.target.value)}
-                      onFocus={() => onFieldFocus("strokeVolumeCerebellum")}
-                      onBlur={() => onFieldFocus(null)}
-                      className={activeField === "strokeVolumeCerebellum" ? "ring-2 ring-primary" : ""}
-                    />
-                  </div>
-                </div>
-
-                <h3 className="font-semibold text-base mt-6">Edema Dynamics</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="edemaDynamics">Edema Description</Label>
-                  <Textarea
-                    id="edemaDynamics"
-                    value={getFieldValue("edemaDynamics")}
-                    onChange={(e) => handleFieldChange("edemaDynamics", e.target.value)}
-                    onFocus={() => onFieldFocus("edemaDynamics")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "edemaDynamics" ? "ring-2 ring-primary" : ""}
-                    rows={3}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="peakSwellingWindow">Peak Swelling Window</Label>
-                  <Input
-                    id="peakSwellingWindow"
-                    value={getFieldValue("peakSwellingWindow")}
-                    onChange={(e) => handleFieldChange("peakSwellingWindow", e.target.value)}
-                    onFocus={() => onFieldFocus("peakSwellingWindow")}
-                    onBlur={() => onFieldFocus(null)}
-                    className={activeField === "peakSwellingWindow" ? "ring-2 ring-primary" : ""}
-                  />
-                </div>
-
-                <h3 className="font-semibold text-base mt-6">Involvement Areas</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="brainstemInvolvement">Brainstem Involvement?</Label>
-                    <Select
-                      value={getFieldValue("brainstemInvolvement")}
-                      onValueChange={(value) => handleFieldChange("brainstemInvolvement", value)}
-                    >
-                      <SelectTrigger className={activeField === "brainstemInvolvement" ? "ring-2 ring-primary" : ""}>
-                        <SelectValue placeholder="Unknown" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="null">Unknown</SelectItem>
-                        <SelectItem value="true">Yes</SelectItem>
-                        <SelectItem value="false">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="supratentorialInvolvement">Supratentorial?</Label>
-                    <Select
-                      value={getFieldValue("supratentorialInvolvement")}
-                      onValueChange={(value) => handleFieldChange("supratentorialInvolvement", value)}
-                    >
-                      <SelectTrigger className={activeField === "supratentorialInvolvement" ? "ring-2 ring-primary" : ""}>
-                        <SelectValue placeholder="Unknown" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="null">Unknown</SelectItem>
-                        <SelectItem value="true">Yes</SelectItem>
-                        <SelectItem value="false">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nonCerebellarStroke">Non-cerebellar?</Label>
-                    <Select
-                      value={getFieldValue("nonCerebellarStroke")}
-                      onValueChange={(value) => handleFieldChange("nonCerebellarStroke", value)}
-                    >
-                      <SelectTrigger className={activeField === "nonCerebellarStroke" ? "ring-2 ring-primary" : ""}>
-                        <SelectValue placeholder="Unknown" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="null">Unknown</SelectItem>
-                        <SelectItem value="true">Yes</SelectItem>
-                        <SelectItem value="false">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </>
+              <Step4Imaging
+                formData={formData}
+                onUpdate={handleBulkUpdate}
+                onFieldFocus={onFieldFocus}
+                disabled={isExtractionStopped}
+              />
             )}
 
             {/* STEP 5: INTERVENTIONS */}
