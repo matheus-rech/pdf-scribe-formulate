@@ -27,6 +27,19 @@ export interface MortalityData {
   armData: { armId: string; n: string; percent: string }[];
 }
 
+export interface MRSData {
+  id: string;
+  timepoint: string;
+  armData: { armId: string; mrs0: string; mrs1: string; mrs2: string; mrs3: string; mrs4: string; mrs5: string; mrs6: string }[];
+}
+
+export interface Predictor {
+  id: string;
+  variable: string;
+  outcome: string;
+  statisticalMeasure: string;
+}
+
 export interface ExtractionFormState {
   currentStep: number;
   formData: Record<string, unknown>;
@@ -34,6 +47,8 @@ export interface ExtractionFormState {
   indications: Indication[];
   interventions: Intervention[];
   mortalityData: MortalityData[];
+  mrsData: MRSData[];
+  predictors: Predictor[];
   isExtractingPICOT: boolean;
   isExtractingAll: boolean;
   saveStatus: 'saved' | 'saving' | 'error' | 'unsaved';

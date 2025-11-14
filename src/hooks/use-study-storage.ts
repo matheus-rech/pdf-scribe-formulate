@@ -495,7 +495,10 @@ export const useStudyStorage = (userId: string | null) => {
         message: 'Study created successfully!'
       });
 
-      setCurrentStudy(data);
+      setCurrentStudy({
+        ...data,
+        total_pages: data.total_pages ?? 0
+      });
       
       const avgConfidence = Math.round(
         (sections.reduce((sum: number, s: any) => sum + s.confidence, 0) / sections.length) * 100
@@ -663,7 +666,11 @@ export const useStudyStorage = (userId: string | null) => {
     try {
       // Load PDF from storage
       toast.info("Loading PDF from storage...");
-      const pdfFile = await loadStudyPdf(study.data);
+      const studyData: Study = {
+        ...study.data,
+        total_pages: study.data.total_pages ?? 0
+      };
+      const pdfFile = await loadStudyPdf(studyData);
       if (!pdfFile) {
         throw new Error("Failed to load PDF");
       }
@@ -693,7 +700,11 @@ export const useStudyStorage = (userId: string | null) => {
 
       // Update current study if it matches
       if (currentStudy?.id === studyId) {
-        setCurrentStudy({ ...study.data, pdf_chunks: pdfChunks });
+        setCurrentStudy({
+          ...study.data,
+          total_pages: study.data.total_pages ?? 0,
+          pdf_chunks: pdfChunks
+        });
       }
 
       toast.success("PDF re-processed successfully");
@@ -733,7 +744,11 @@ export const useStudyStorage = (userId: string | null) => {
       }
 
       // Load PDF
-      const pdfFile = await loadStudyPdf(study);
+      const studyData: Study = {
+        ...study,
+        total_pages: study.total_pages ?? 0
+      };
+      const pdfFile = await loadStudyPdf(studyData);
       if (!pdfFile) {
         toast.error("Failed to load PDF file");
         return { figures: 0, tables: 0, success: false };
@@ -904,7 +919,11 @@ export const useStudyStorage = (userId: string | null) => {
       }
 
       // Load PDF
-      const pdfFile = await loadStudyPdf(study);
+      const studyData: Study = {
+        ...study,
+        total_pages: study.total_pages ?? 0
+      };
+      const pdfFile = await loadStudyPdf(studyData);
       if (!pdfFile) {
         toast.error("Failed to load PDF file");
         return { chunks: 0, success: false };
@@ -1075,10 +1094,16 @@ export const useStudyStorage = (userId: string | null) => {
 
     // Process each study sequentially
     for (let i = 0; i < studiesNeedingReprocess.length; i++) {
-      const study = studiesNeedingReprocess[i];
+      const studyData = studiesNeedingReprocess[i];
+      if (!studyData) continue;
+      
+      const study: Study = {
+        ...studyData,
+        total_pages: studyData.total_pages ?? 0
+      };
       
       // Update status to processing
-      results[i].status = 'processing';
+      results[i]!.status = 'processing';
       onProgress?.({
         total: studiesNeedingReprocess.length,
         completed,
@@ -1114,14 +1139,14 @@ export const useStudyStorage = (userId: string | null) => {
         if (error) throw error;
 
         // Mark as success
-        results[i].status = 'success';
+        results[i]!.status = 'success';
         completed++;
         
         console.log(`✅ Successfully reprocessed: ${study.name}`);
       } catch (error: any) {
         console.error(`❌ Failed to reprocess ${study.name}:`, error);
-        results[i].status = 'error';
-        results[i].error = error.message || 'Unknown error';
+        results[i]!.status = 'error';
+        results[i]!.error = error.message || 'Unknown error';
         failed++;
       }
 

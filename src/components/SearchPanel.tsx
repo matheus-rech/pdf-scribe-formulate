@@ -104,8 +104,9 @@ export const SearchPanel = ({ pdfText, onSearchResult, onNavigateToResult, isOpe
     }
     
     setCurrentMatchIndex(newIndex);
-    if (onNavigateToResult && results[newIndex]) {
-      onNavigateToResult(results[newIndex]);
+    const result = results[newIndex];
+    if (onNavigateToResult && result) {
+      onNavigateToResult(result);
     }
   };
 
