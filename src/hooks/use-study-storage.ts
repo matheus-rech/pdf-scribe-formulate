@@ -6,6 +6,8 @@ import { processFullPDF } from "@/lib/pdfChunking";
 import { createSemanticChunks } from "@/lib/semanticChunking";
 import { detectSections } from "@/lib/sectionDetection";
 import type { PageAnnotation } from "@/hooks/usePageAnnotations";
+import { extractAllFigures } from "@/lib/figureExtraction";
+import * as pdfjsLib from 'pdfjs-dist';
 
 export interface ProcessingProgress {
   stage: 'uploading' | 'analyzing' | 'chunking' | 'sections' | 'complete';
@@ -104,7 +106,7 @@ export const useStudyStorage = (userId: string | null) => {
       
       onProgress?.({
         stage: 'sections',
-        progress: 85,
+        progress: 75,
         message: 'Detecting document sections...'
       });
       const sections = detectSections(processingResult.pageChunks);
@@ -138,6 +140,68 @@ export const useStudyStorage = (userId: string | null) => {
         .single();
 
       if (error) throw error;
+
+      // Extract figures from PDF
+      onProgress?.({
+        stage: 'complete',
+        progress: 85,
+        message: 'Extracting figures from PDF...'
+      });
+
+      try {
+        // Load PDF.js for figure extraction
+        const pdfDoc = await pdfjsLib.getDocument({
+          data: await pdfFile.arrayBuffer()
+        }).promise;
+
+        const { allFigures, allDiagnostics } = await extractAllFigures(
+          pdfDoc,
+          (current, total) => {
+            const figProgress = 85 + (current / total) * 10; // 85-95%
+            onProgress?.({
+              stage: 'complete',
+              progress: figProgress,
+              message: `Extracting figures: page ${current}/${total}...`
+            });
+          }
+        );
+
+        console.log(`📊 Figure extraction complete: Found ${allFigures.length} figures`);
+
+        // Save figures to database
+        if (allFigures.length > 0) {
+          const figureRecords = allFigures.map(fig => ({
+            study_id: data.id,
+            user_id: userId,
+            page_number: fig.pageNum,
+            figure_id: fig.id,
+            data_url: fig.dataUrl,
+            width: fig.width,
+            height: fig.height,
+            extraction_method: fig.extractionMethod,
+            color_space: fig.metadata.colorSpace,
+            has_alpha: fig.metadata.hasAlpha,
+            data_length: fig.metadata.dataLength,
+            caption: fig.caption || null,
+            ai_enhanced: fig.aiEnhanced || false
+          }));
+
+          const { error: figureError } = await supabase
+            .from('pdf_figures')
+            .insert(figureRecords);
+
+          if (figureError) {
+            console.error('Error saving figures:', figureError);
+            toast.error('Figures extracted but failed to save to database');
+          } else {
+            console.log(`✅ Saved ${allFigures.length} figures to database`);
+          }
+        }
+      } catch (figError) {
+        console.error('Error extracting figures:', figError);
+        // Don't fail the entire study creation if figure extraction fails
+        toast.error('Failed to extract figures, but study was created');
+      }
 
       onProgress?.({
         stage: 'complete',
@@ -508,6 +572,24 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
+  // Load extracted figures for a study
+  const loadStudyFigures = async (studyId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('pdf_figures')
+        .select('*')
+        .eq('study_id', studyId)
+        .order('page_number', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error: any) {
+      console.error('Error loading figures:', error);
+      toast.error('Failed to load extracted figures');
+      return [];
+    }
+  };
+
   return {
     currentStudy,
     setCurrentStudy,
@@ -521,5 +603,6 @@ export const useStudyStorage = (userId: string | null) => {
     bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
+    loadStudyFigures,
   };
 };
