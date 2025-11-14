@@ -1,5 +1,6 @@
 import { Component, ReactNode, ErrorInfo } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { useNavigate, NavigateFunction } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 
@@ -7,6 +8,7 @@ interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  navigate?: NavigateFunction;
 }
 
 interface State {
@@ -58,7 +60,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   handleGoHome = (): void => {
     this.handleReset();
-    window.location.href = '/';
+    if (this.props.navigate) {
+      this.props.navigate('/');
+    } else {
+      // Fallback to window.location if navigate is not available
+      window.location.href = '/';
+    }
   };
 
   render(): ReactNode {
@@ -150,5 +157,6 @@ export const ErrorBoundaryWrapper = ({
   children: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }): JSX.Element => {
-  return <ErrorBoundary onError={onError}>{children}</ErrorBoundary>;
+  const navigate = useNavigate();
+  return <ErrorBoundary onError={onError} navigate={navigate}>{children}</ErrorBoundary>;
 };

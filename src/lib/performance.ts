@@ -308,9 +308,19 @@ export function initPerformanceMonitoring(): void {
 
   // Log page load performance
   window.addEventListener('load', () => {
-    const perfData = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+    // Type guard to check if performance navigation timing is available
+    if (!performance.getEntriesByType || typeof performance.getEntriesByType !== 'function') {
+      return;
+    }
 
-    if (perfData) {
+    const entries = performance.getEntriesByType('navigation');
+    if (!entries || entries.length === 0) {
+      return;
+    }
+
+    const perfData = entries[0] as PerformanceNavigationTiming;
+
+    if (perfData && perfData.loadEventEnd && perfData.fetchStart) {
       performanceMonitor.recordMetric({
         name: 'page_load',
         value: perfData.loadEventEnd - perfData.fetchStart,
@@ -318,19 +328,23 @@ export function initPerformanceMonitoring(): void {
         timestamp: Date.now(),
       });
 
-      performanceMonitor.recordMetric({
-        name: 'dom_content_loaded',
-        value: perfData.domContentLoadedEventEnd - perfData.fetchStart,
-        unit: 'ms',
-        timestamp: Date.now(),
-      });
+      if (perfData.domContentLoadedEventEnd) {
+        performanceMonitor.recordMetric({
+          name: 'dom_content_loaded',
+          value: perfData.domContentLoadedEventEnd - perfData.fetchStart,
+          unit: 'ms',
+          timestamp: Date.now(),
+        });
+      }
 
-      performanceMonitor.recordMetric({
-        name: 'first_paint',
-        value: perfData.responseStart - perfData.fetchStart,
-        unit: 'ms',
-        timestamp: Date.now(),
-      });
+      if (perfData.responseStart) {
+        performanceMonitor.recordMetric({
+          name: 'first_paint',
+          value: perfData.responseStart - perfData.fetchStart,
+          unit: 'ms',
+          timestamp: Date.now(),
+        });
+      }
     }
   });
 }
