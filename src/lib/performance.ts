@@ -6,6 +6,8 @@
  * Google Analytics, Sentry, or custom monitoring solutions.
  */
 
+import { useEffect, useRef } from "react";
+
 export interface PerformanceMetric {
   name: string;
   value: number;
@@ -193,8 +195,6 @@ export const performanceMonitor = new PerformanceMonitor();
  *   usePerformanceMonitor("MyComponent")
  * Records the time taken for the component to render.
  */
-import { useEffect, useRef } from "react";
-
 export function usePerformanceMonitor(componentName: string) {
   const startTimeRef = useRef<number>(performance.now());
 
