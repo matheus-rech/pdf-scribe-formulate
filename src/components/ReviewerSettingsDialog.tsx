@@ -101,6 +101,7 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
           .update({
             enabled: reviewer.enabled,
             temperature: reviewer.temperature,
+            model: reviewer.model as any,
             seed: reviewer.seed,
             max_tokens: reviewer.max_tokens,
             reasoning_effort: reviewer.reasoning_effort,
@@ -243,28 +244,88 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
               
               {reviewer.enabled && (
                 <CardContent className="pt-0 space-y-4">
-                  {/* Temperature Slider */}
+                  {/* Model Selection */}
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">
-                        Temperature: {reviewer.temperature.toFixed(2)}
-                      </Label>
-                      <span className="text-xs text-muted-foreground">
-                        {reviewer.temperature < 0.3 ? 'Very Conservative' :
-                         reviewer.temperature < 0.6 ? 'Balanced' :
-                         reviewer.temperature < 0.9 ? 'Creative' : 'Very Creative'}
-                      </span>
-                    </div>
-                    <Slider
-                      value={[reviewer.temperature]}
-                      onValueChange={(value) => handleTemperatureChange(reviewer.id, value)}
-                      min={0}
-                      max={1}
-                      step={0.1}
-                      className="w-full"
-                      disabled={!reviewer.enabled}
-                    />
+                    <Label className="text-sm">AI Model</Label>
+                    <Select
+                      value={reviewer.model}
+                      onValueChange={(value) => handleFieldChange(reviewer.id, 'model', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="google/gemini-2.5-pro">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">Gemini 2.5 Pro</span>
+                            <span className="text-xs text-muted-foreground">Best quality, slower, multimodal</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="google/gemini-2.5-flash">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">Gemini 2.5 Flash</span>
+                            <span className="text-xs text-muted-foreground">Balanced speed & quality</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="google/gemini-2.5-flash-lite">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">Gemini 2.5 Flash Lite</span>
+                            <span className="text-xs text-muted-foreground">Fastest, cheapest</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="openai/gpt-5">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">GPT-5</span>
+                            <span className="text-xs text-muted-foreground">Powerful reasoning, multimodal</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="openai/gpt-5-mini">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">GPT-5 Mini</span>
+                            <span className="text-xs text-muted-foreground">Fast & cost-efficient</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="openai/gpt-5-nano">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">GPT-5 Nano</span>
+                            <span className="text-xs text-muted-foreground">Ultra-fast, simple tasks</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {/* Temperature Slider - Only for Gemini models */}
+                  {reviewer.model.startsWith('google/') && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">
+                          Temperature: {reviewer.temperature.toFixed(2)}
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          {reviewer.temperature < 0.3 ? 'Very Conservative' :
+                           reviewer.temperature < 0.6 ? 'Balanced' :
+                           reviewer.temperature < 0.9 ? 'Creative' : 'Very Creative'}
+                        </span>
+                      </div>
+                      <Slider
+                        value={[reviewer.temperature]}
+                        onValueChange={(value) => handleTemperatureChange(reviewer.id, value)}
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+
+                  {!reviewer.model.startsWith('google/') && (
+                    <Alert>
+                      <AlertDescription className="text-xs">
+                        OpenAI models use default temperature (1.0) and cannot be adjusted.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   {/* Seed Input */}
                   <div className="space-y-2">
@@ -300,10 +361,13 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
                     />
                   </div>
 
-                  {/* Reasoning Effort (for o1/o3/o4 models) */}
+                  {/* Reasoning Effort (only for reasoning models) */}
                   {(reviewer.model.includes('o1') || reviewer.model.includes('o3') || reviewer.model.includes('o4')) && (
                     <div className="space-y-2">
-                      <Label className="text-sm">Reasoning Effort</Label>
+                      <Label className="text-sm flex items-center gap-2">
+                        Reasoning Effort
+                        <Badge variant="secondary" className="text-xs">o1/o3/o4 only</Badge>
+                      </Label>
                       <Select
                         value={reviewer.reasoning_effort || 'medium'}
                         onValueChange={(value) => handleFieldChange(reviewer.id, 'reasoning_effort', value)}
@@ -317,6 +381,9 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
                           <SelectItem value="high">High - Deep reasoning</SelectItem>
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Controls how much computational effort the model spends on reasoning
+                      </p>
                     </div>
                   )}
                 </CardContent>

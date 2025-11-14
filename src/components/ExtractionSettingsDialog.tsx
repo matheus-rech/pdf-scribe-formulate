@@ -49,16 +49,19 @@ export const ExtractionSettingsDialog = ({ open, onOpenChange }: ExtractionSetti
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('extraction_settings')
+        .from('extraction_settings' as any)
         .select('*')
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         throw error;
       }
 
       if (data) {
-        setSettings(data);
+        const settingsData = data as any;
+        if (settingsData.min_reviewers !== undefined) {
+          setSettings(settingsData);
+        }
       }
     } catch (error) {
       console.error("Error loading extraction settings:", error);
@@ -84,7 +87,7 @@ export const ExtractionSettingsDialog = ({ open, onOpenChange }: ExtractionSetti
       if (!user) throw new Error("User not authenticated");
 
       const { error } = await supabase
-        .from('extraction_settings')
+        .from('extraction_settings' as any)
         .upsert([{ ...settings, user_id: user.id }]);
 
       if (error) throw error;
