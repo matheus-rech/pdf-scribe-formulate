@@ -5,10 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Mail, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { setTrustedDevice, isTrustedDevice } from "@/lib/trustedDevice";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -20,9 +22,24 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
 
   useEffect(() => {
     const initAuth = async () => {
+      // Check for trusted device first
+      const trusted = await isTrustedDevice();
+      if (trusted) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          toast({
+            title: "Welcome back!",
+            description: "Signed in from trusted device",
+          });
+          navigate('/');
+          return;
+        }
+      }
+
       // Handle magic link callback from URL hash
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
@@ -41,6 +58,11 @@ const Auth = () => {
           if (error) throw error;
 
           if (data.session) {
+            // Store as trusted device if remember was checked
+            if (rememberDevice) {
+              setTrustedDevice(data.session.user.id);
+            }
+            
             // Clear the hash from URL
             window.location.hash = '';
             toast({
@@ -73,13 +95,16 @@ const Auth = () => {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session && rememberDevice) {
+        setTrustedDevice(session.user.id);
+      }
       if (event === 'SIGNED_IN' && session) {
         navigate("/");
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate, toast]);
+  }, [navigate, toast, rememberDevice]);
 
 
   const handleMagicLink = async (e: React.FormEvent) => {
@@ -275,6 +300,20 @@ const Auth = () => {
                       autoFocus
                     />
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="remember-email" 
+                      checked={rememberDevice}
+                      onCheckedChange={(checked) => setRememberDevice(checked as boolean)}
+                      disabled={loading}
+                    />
+                    <Label 
+                      htmlFor="remember-email" 
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      Remember this device for 30 days
+                    </Label>
+                  </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     <Mail className="mr-2 h-4 w-4" />
                     {loading ? "Sending..." : "Send magic link"}
@@ -358,6 +397,20 @@ const Auth = () => {
                     <p className="text-xs text-muted-foreground">
                       Enter phone with country code (e.g., +12025551234)
                     </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="remember-phone" 
+                      checked={rememberDevice}
+                      onCheckedChange={(checked) => setRememberDevice(checked as boolean)}
+                      disabled={loading}
+                    />
+                    <Label 
+                      htmlFor="remember-phone" 
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      Remember this device for 30 days
+                    </Label>
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     <Phone className="mr-2 h-4 w-4" />
