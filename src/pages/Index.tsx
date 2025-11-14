@@ -23,6 +23,7 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { BulkStudyExportDialog } from "@/components/BulkStudyExportDialog";
 import { SourceProvenancePanel } from "@/components/SourceProvenancePanel";
 import { supabase } from "@/integrations/supabase/client";
+import { autoExtractAndSaveTables } from "@/lib/autoTableExtraction";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import type { ImperativePanelHandle } from "react-resizable-panels";
@@ -60,7 +61,7 @@ const Index = () => {
   const [scale, setScale] = useState(1);
   const [pdfText, setPdfText] = useState<string>("");
   const [studies, setStudies] = useState<any[]>([]);
-  const [isCreatingStudy, setIsCreatingStudy] = useState(false);
+  const isCreatingStudyRef = useRef(false);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>({
     stage: 'uploading',
     progress: 0,
@@ -182,7 +183,14 @@ const Index = () => {
 
   // Create study and upload PDF when totalPages is available
   useEffect(() => {
-    if (pdfFile && totalPages > 0 && isCreatingStudy && !currentStudy) {
+    console.log('📋 Study creation useEffect triggered:', { 
+      hasPdfFile: !!pdfFile, 
+      totalPages, 
+      isCreatingStudy: isCreatingStudyRef.current, 
+      hasCurrentStudy: !!currentStudy 
+    });
+    
+    if (pdfFile && totalPages > 0 && isCreatingStudyRef.current && !currentStudy) {
       const studyName = pdfFile.name.replace('.pdf', '') || `Study - ${new Date().toLocaleDateString()}`;
       
       setShowSectionProgress(true);
@@ -197,10 +205,31 @@ const Index = () => {
         (sections) => {
           setDetectedSections(sections);
         }
-      ).then((newStudy) => {
+      ).then(async (newStudy) => {
         if (newStudy) {
           getAllStudies().then(setStudies);
-          setIsCreatingStudy(false);
+          
+          // Automatically extract tables from PDF
+          try {
+            console.log('🔍 Starting automatic table extraction...', { studyId: newStudy.id, fileName: pdfFile.name });
+            setProcessingStatus({
+              stage: 'processing',
+              progress: 90,
+              message: 'Extracting tables from PDF...'
+            });
+            const tableCount = await autoExtractAndSaveTables(pdfFile, newStudy.id);
+            console.log('✅ Table extraction complete:', { tableCount });
+            if (tableCount > 0) {
+              toast.success(`Automatically extracted ${tableCount} table(s) from PDF`);
+            } else {
+              console.log('ℹ️ No tables found in PDF');
+            }
+          } catch (error) {
+            console.error('❌ Error auto-extracting tables:', error);
+            // Non-critical error, don't block the workflow
+          }
+          
+          isCreatingStudyRef.current = false;
           // Keep section progress visible for a moment
           setTimeout(() => setShowSectionProgress(false), 3000);
         } else {
@@ -208,7 +237,7 @@ const Index = () => {
         }
       });
     }
-  }, [pdfFile, totalPages, isCreatingStudy, currentStudy]);
+  }, [pdfFile, totalPages, currentStudy]);
 
   const handleExtraction = (entry: ExtractionEntry) => {
     setExtractions(prev => [...prev, entry]);
@@ -264,7 +293,11 @@ const Index = () => {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    console.log('📎 handleFileUpload called:', { fileName: file?.name, fileType: file?.type });
+    
     if (file && file.type === 'application/pdf') {
+      console.log('✅ Valid PDF file, starting upload process');
+      
       // Clear current state
       setCurrentStudy(null);
       setExtractions([]);
@@ -274,7 +307,8 @@ const Index = () => {
       
       // Set new PDF - study creation will happen after PDF loads and totalPages is set
       setPdfFile(file);
-      setIsCreatingStudy(true);
+      isCreatingStudyRef.current = true;
+      console.log('🛠️ Set isCreatingStudy ref to TRUE');
       toast.info("Loading PDF...");
     } else {
       toast.error("Please select a valid PDF file");
@@ -606,7 +640,7 @@ const Index = () => {
                 sections={detectedSections}
                 currentPage={currentPage}
                 totalPages={totalPages}
-                isProcessing={isCreatingStudy}
+                isProcessing={isCreatingStudyRef.current}
               />
             )}
 
@@ -842,7 +876,7 @@ const Index = () => {
       </ResizablePanelGroup>
       
       {/* PDF Processing Progress Dialog */}
-      <PDFProcessingDialog open={isCreatingStudy} status={processingStatus} />
+      <PDFProcessingDialog open={isCreatingStudyRef.current} status={processingStatus} />
       
       {/* Bulk Reprocess Progress Dialog */}
       <BulkReprocessDialog 
