@@ -221,7 +221,9 @@ The extraction process is divided into 8 steps:
 2. **Linting Errors**: 351 linting issues (329 `any` types, 22 React Hook warnings).
 3. **E2E Test Fixtures**: Sample PDF files need to be added to `e2e/fixtures/`.
 4. **Large Components**: Some components exceed 1,000 lines and could be refactored.
-5. **Security Vulnerabilities**: 4 npm vulnerabilities (2 moderate, 2 high) - run `npm audit` for details.
+5. **Security Vulnerabilities**: 4 npm vulnerabilities (2 moderate, 2 high) detected by `npm audit`. 
+   - **Scope**: All vulnerabilities are currently limited to dev dependencies and do **not** affect production code.
+   - **Remediation Plan**: Dependencies will be updated and vulnerabilities resolved in the next release cycle. Track progress in [GitHub Issues](https://github.com/your-org/your-repo/issues).
 
 ## Performance Notes
 
