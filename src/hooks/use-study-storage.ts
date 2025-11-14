@@ -1296,6 +1296,48 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
+  // Re-extract all (figures, tables, and text chunks) in one operation
+  const reextractAll = async (studyId: string, onProgress: (message: string) => void) => {
+    try {
+      onProgress('Starting comprehensive re-extraction...');
+      
+      // Run visual extraction first
+      onProgress('Re-extracting figures and tables...');
+      const visualResult = await reextractVisuals(studyId, onProgress);
+      
+      if (!visualResult.success) {
+        return { success: false, figures: 0, tables: 0, chunks: 0 };
+      }
+      
+      // Then extract text chunks
+      onProgress('Re-extracting text chunks...');
+      const chunksResult = await reextractTextChunks(studyId, onProgress);
+      
+      if (!chunksResult.success) {
+        return { 
+          success: false, 
+          figures: visualResult.figures, 
+          tables: visualResult.tables, 
+          chunks: 0 
+        };
+      }
+      
+      onProgress('Complete! All data re-extracted successfully');
+      toast.success(`Re-extracted ${visualResult.figures} figures, ${visualResult.tables} tables, and ${chunksResult.chunks} text chunks`);
+      
+      return {
+        success: true,
+        figures: visualResult.figures,
+        tables: visualResult.tables,
+        chunks: chunksResult.chunks
+      };
+    } catch (error: any) {
+      console.error('Error in comprehensive re-extraction:', error);
+      toast.error(`Re-extraction failed: ${error.message}`);
+      return { success: false, figures: 0, tables: 0, chunks: 0 };
+    }
+  };
+
   return {
     currentStudy,
     setCurrentStudy,
@@ -1308,6 +1350,7 @@ export const useStudyStorage = (userId: string | null) => {
     reprocessStudy,
     reextractVisuals,
     reextractTextChunks,
+    reextractAll,
     bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
