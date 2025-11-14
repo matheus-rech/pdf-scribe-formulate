@@ -454,7 +454,7 @@ export const getAutoFix = (warning: ValidationWarning, formData: Record<string, 
       
       const fixedArms = formData.studyArms.map((arm: any) => {
         const currentN = parseInt(arm.n) || 0;
-        let adjustedN = Math.round(currentN * factor);
+        const adjustedN = Math.round(currentN * factor);
         
         return { ...arm, n: adjustedN.toString() };
       });
