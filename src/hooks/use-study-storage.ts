@@ -878,6 +878,141 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
+  // Re-extract text chunks for a study
+  const reextractTextChunks = async (
+    studyId: string,
+    onProgress?: (message: string) => void
+  ): Promise<{ chunks: number; success: boolean }> => {
+    if (!userId) {
+      toast.error("User ID required - please log in");
+      return { chunks: 0, success: false };
+    }
+
+    try {
+      onProgress?.('Loading study PDF...');
+      
+      // Get study
+      const { data: study, error: studyError } = await supabase
+        .from("studies")
+        .select("*")
+        .eq("id", studyId)
+        .single();
+
+      if (studyError || !study) {
+        toast.error("Study not found");
+        return { chunks: 0, success: false };
+      }
+
+      // Load PDF
+      const pdfFile = await loadStudyPdf(study);
+      if (!pdfFile) {
+        toast.error("Failed to load PDF file");
+        return { chunks: 0, success: false };
+      }
+
+      let chunksCount = 0;
+
+      // ===== Re-extract Text Chunks =====
+      onProgress?.('Re-extracting text chunks with coordinates...');
+      try {
+        const chunkPdfDoc = await pdfjsLib.getDocument({
+          data: await pdfFile.arrayBuffer()
+        }).promise;
+
+        const { extractTextWithCoordinates } = await import('@/lib/textChunkIndexing');
+        
+        const allTextChunks: any[] = [];
+        let globalChunkIndex = 0;
+
+        // Get sections from study if available
+        const sections = (study.pdf_chunks as any)?.sections || [];
+
+        for (let pageNum = 1; pageNum <= chunkPdfDoc.numPages; pageNum++) {
+          onProgress?.(`Extracting text chunks: page ${pageNum}/${chunkPdfDoc.numPages}...`);
+          
+          const page = await chunkPdfDoc.getPage(pageNum);
+          const pageChunks = await extractTextWithCoordinates(page, pageNum, 0);
+
+          // Assign global indices and map to sections
+          pageChunks.forEach(chunk => {
+            chunk.chunkIndex = globalChunkIndex++;
+            
+            // Find section for this chunk
+            if (sections && chunk.charStart !== undefined) {
+              const section = sections.find(
+                (s: any) => chunk.charStart >= s.charStart && chunk.charEnd <= s.charEnd
+              );
+              if (section) {
+                chunk.sectionName = section.type;
+              }
+            }
+            
+            allTextChunks.push(chunk);
+          });
+        }
+
+        console.log(`📊 Text chunk re-extraction complete: Found ${allTextChunks.length} chunks`);
+
+        if (allTextChunks.length > 0) {
+          // Delete old chunks first
+          await supabase
+            .from('pdf_text_chunks' as any)
+            .delete()
+            .eq('study_id', studyId);
+
+          const chunkRecords = allTextChunks.map(chunk => ({
+            study_id: studyId,
+            user_id: userId,
+            chunk_index: chunk.chunkIndex,
+            page_number: chunk.pageNum,
+            text: chunk.text,
+            sentence_count: 1,
+            x: chunk.bbox.x,
+            y: chunk.bbox.y,
+            width: chunk.bbox.width,
+            height: chunk.bbox.height,
+            char_start: chunk.charStart,
+            char_end: chunk.charEnd,
+            section_name: chunk.sectionName || null,
+            font_name: chunk.fontName,
+            font_size: chunk.fontSize,
+            is_heading: chunk.isHeading,
+            is_bold: chunk.isBold
+          }));
+
+          const { error: chunksError } = await supabase
+            .from('pdf_text_chunks' as any)
+            .insert(chunkRecords as any);
+
+          if (chunksError) {
+            console.error('❌ Error saving re-extracted text chunks:', chunksError);
+            toast.error(`Failed to save text chunks: ${chunksError.message}`);
+          } else {
+            chunksCount = allTextChunks.length;
+            console.log(`✅ Re-extracted ${chunksCount} text chunks`);
+          }
+        }
+      } catch (chunkError: any) {
+        console.error('Error re-extracting text chunks:', chunkError);
+        toast.error(`Text chunk re-extraction failed: ${chunkError?.message}`);
+      }
+
+      onProgress?.('Re-extraction complete!');
+      
+      if (chunksCount > 0) {
+        toast.success(`Re-extracted ${chunksCount} text chunks`);
+        return { chunks: chunksCount, success: true };
+      } else {
+        toast.info('No text chunks found in this PDF');
+        return { chunks: 0, success: true };
+      }
+    } catch (error: any) {
+      console.error('Error during text chunk re-extraction:', error);
+      toast.error(`Re-extraction failed: ${error?.message || 'Unknown error'}`);
+      return { chunks: 0, success: false };
+    }
+  };
+
   // Bulk reprocess all studies with missing chunks
   const bulkReprocessStudies = async (
     onProgress?: (progress: {
@@ -1172,6 +1307,7 @@ export const useStudyStorage = (userId: string | null) => {
     loadStudyPdf,
     reprocessStudy,
     reextractVisuals,
+    reextractTextChunks,
     bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
