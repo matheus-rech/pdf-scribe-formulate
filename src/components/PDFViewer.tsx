@@ -18,6 +18,7 @@ import { SearchPanel } from "./SearchPanel";
 import { CitationLinkPanel } from "./CitationLinkPanel";
 import { SectionNavigator } from "./SectionNavigator";
 import { BoundingBoxControls, type BoundingBoxVisibility } from "./BoundingBoxControls";
+import { FigureCaptionTooltip } from "./FigureCaptionTooltip";
 import { useAnnotationCanvas } from "@/hooks/useAnnotationCanvas";
 import { usePageAnnotations } from "@/hooks/usePageAnnotations";
 import { useCanvasHistory } from "@/hooks/useCanvasHistory";
@@ -165,7 +166,7 @@ export const PDFViewer = ({
   } = useAnnotationCanvas(drawingCanvasRef, pageDimensions.width, pageDimensions.height, drawingMode);
 
   // Bounding box visualization
-  useBoundingBoxVisualization({
+  const { hoveredFigure } = useBoundingBoxVisualization({
     pdfDoc: pdfDocRef?.current || null,
     currentPage,
     scale,
@@ -1328,6 +1329,15 @@ export const PDFViewer = ({
               </div>
             )}
           </div>
+        )}
+
+        {/* Figure Caption Tooltip */}
+        {hoveredFigure && (
+          <FigureCaptionTooltip
+            figure={hoveredFigure.figure}
+            x={hoveredFigure.x}
+            y={hoveredFigure.y}
+          />
         )}
       </div>
     </div>

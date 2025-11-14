@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import type { BoundingBoxVisibility } from "@/components/BoundingBoxControls";
 
@@ -31,6 +31,11 @@ export const useBoundingBoxVisualization = ({
   extractedTables = [],
 }: BoundingBoxVisualizationProps) => {
   const animationFrameRef = useRef<number | null>(null);
+  const [hoveredFigure, setHoveredFigure] = useState<{
+    figure: any;
+    x: number;
+    y: number;
+  } | null>(null);
 
   /**
    * Extract text items with coordinates from PDF page
@@ -339,6 +344,55 @@ export const useBoundingBoxVisualization = ({
     renderFigureBoxes,
   ]);
 
+  /**
+   * Handle mouse move to detect hover over figures
+   */
+  const handleMouseMove = useCallback(
+    (event: MouseEvent) => {
+      if (!canvasRef.current || !visibility.figures || extractedFigures.length === 0) {
+        if (hoveredFigure) setHoveredFigure(null);
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      // Check if mouse is over any figure bounding box
+      const pageFigures = extractedFigures.filter((f) => f.page_number === currentPage);
+      
+      for (const figure of pageFigures) {
+        if (!figure.x && figure.x !== 0) continue;
+        if (!figure.bbox_width || !figure.bbox_height) continue;
+
+        const figX = figure.x * scale;
+        const figY = figure.y * scale;
+        const figW = figure.bbox_width * scale;
+        const figH = figure.bbox_height * scale;
+
+        // Check if mouse is within figure bounds
+        if (
+          mouseX >= figX &&
+          mouseX <= figX + figW &&
+          mouseY >= figY &&
+          mouseY <= figY + figH
+        ) {
+          setHoveredFigure({
+            figure,
+            x: event.clientX,
+            y: event.clientY,
+          });
+          return;
+        }
+      }
+
+      // No figure under mouse
+      if (hoveredFigure) setHoveredFigure(null);
+    },
+    [canvasRef, visibility.figures, extractedFigures, currentPage, scale, hoveredFigure]
+  );
+
   // Trigger re-render when dependencies change
   useEffect(() => {
     // Cancel any pending animation frame
@@ -358,7 +412,22 @@ export const useBoundingBoxVisualization = ({
     };
   }, [renderBoundingBoxes]);
 
+  // Add mouse move listener to canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseleave', () => setHoveredFigure(null));
+
+    return () => {
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mouseleave', () => setHoveredFigure(null));
+    };
+  }, [canvasRef, handleMouseMove]);
+
   return {
     renderBoundingBoxes,
+    hoveredFigure,
   };
 };
