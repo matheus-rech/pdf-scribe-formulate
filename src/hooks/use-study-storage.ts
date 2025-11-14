@@ -297,8 +297,8 @@ export const useStudyStorage = (userId: string | null) => {
       const { error } = await supabase
         .from("studies")
         .update({ 
-          page_annotations: annotations as any
-        })
+          page_annotations: annotations
+        } as any)
         .eq("id", studyId)
         .eq("user_id", userId);
 
@@ -328,7 +328,7 @@ export const useStudyStorage = (userId: string | null) => {
 
       if (error) throw error;
       
-      const annotations = (data?.page_annotations || []) as unknown as PageAnnotation[];
+      const annotations = ((data as any)?.page_annotations || []) as PageAnnotation[];
       console.log(`✅ Loaded ${annotations.length} annotations for study ${studyId}`);
       return annotations;
     } catch (error: any) {
