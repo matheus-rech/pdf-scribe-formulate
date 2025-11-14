@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2 } from "lucide-react";
+import type { PromptTemplate } from "@/types/ab-testing";
 
 interface ABTestDialogProps {
   open: boolean;
@@ -33,7 +34,7 @@ const MODELS = [
 
 export const ABTestDialog = ({ open, onOpenChange, onSuccess }: ABTestDialogProps) => {
   const [loading, setLoading] = useState(false);
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -57,9 +58,20 @@ export const ABTestDialog = ({ open, onOpenChange, onSuccess }: ABTestDialogProp
 
   const loadTemplates = async () => {
     const { data } = await supabase
-      .from("prompt_templates")
+      .from("prompt_templates" as any)
       .select("id, template_name, model_provider");
-    setTemplates(data || []);
+    setTemplates(((data as any[]) || []).map(item => ({
+      id: item.id,
+      user_id: item.user_id,
+      model_provider: item.model_provider,
+      template_name: item.template_name,
+      system_prompt: item.system_prompt,
+      extraction_prompt: item.extraction_prompt,
+      field_specific_instructions: (item.field_specific_instructions as Record<string, string>) || {},
+      is_default: item.is_default,
+      created_at: item.created_at,
+      updated_at: item.updated_at
+    })) as PromptTemplate[]);
   };
 
   const handleSubmit = async () => {
