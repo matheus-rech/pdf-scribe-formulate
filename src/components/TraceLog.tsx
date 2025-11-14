@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon, Sparkles, Link2, MapPin, CheckCircle, CheckSquare } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon, Sparkles, Link2, MapPin, CheckCircle, CheckSquare, Search, FileDown } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { toast } from "sonner";
 import { OCRDialog } from "./OCRDialog";
@@ -12,6 +12,11 @@ import { BulkEditDialog } from "./BulkEditDialog";
 import type { SourceCitation } from "@/lib/citationDetector";
 import { detectSourceCitations } from "@/lib/citationDetector";
 import { validateAllCitations, getCitationConfidenceColor, getCitationConfidenceBadge } from "@/lib/citationValidation";
+import { Textarea } from "@/components/ui/textarea";
+import { parseMarkdownFile, extractTextForSearch } from "@/lib/markdownHelper";
+import { searchAcrossAllPages, type SearchResult } from "@/lib/pdfSearch";
+import { createAnnotatedPDF } from "@/lib/pdfExport";
+import * as pdfjsLib from 'pdfjs-dist';
 
 interface TraceLogProps {
   extractions: ExtractionEntry[];
@@ -23,6 +28,10 @@ interface TraceLogProps {
   onJumpToCitation?: (citation: SourceCitation) => void;
   pdfFile?: File | null;
   currentStudy?: any;
+  onSearchInPDF?: (results: SearchResult[]) => void;
+  onHighlightSearchResult?: (result: SearchResult, index: number) => void;
+  pdfDoc?: pdfjsLib.PDFDocumentProxy | null;
+  currentScale?: number;
 }
 
 export const TraceLog = ({ 
@@ -34,7 +43,11 @@ export const TraceLog = ({
   onClearSourceHighlights,
   onJumpToCitation,
   pdfFile,
-  currentStudy
+  currentStudy,
+  onSearchInPDF,
+  onHighlightSearchResult,
+  pdfDoc,
+  currentScale = 1
 }: TraceLogProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
@@ -42,6 +55,14 @@ export const TraceLog = ({
   const [detectingSource, setDetectingSource] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  // Markdown and PDF search state
+  const [markdownFile, setMarkdownFile] = useState<File | null>(null);
+  const [markdownContent, setMarkdownContent] = useState<string>("");
+  const [pdfSearchQuery, setPdfSearchQuery] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchMode, setSearchMode] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
   const filteredExtractions = extractions.filter((entry) =>
     entry.fieldName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -62,6 +83,85 @@ export const TraceLog = ({
     }
   };
 
+  const handleMarkdownUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      const content = await parseMarkdownFile(file);
+      setMarkdownFile(file);
+      setMarkdownContent(content);
+      const searchableText = extractTextForSearch(content);
+      toast.success(`Loaded ${file.name} (${searchableText.length} chars)`);
+    } catch (error) {
+      console.error("Error loading markdown:", error);
+      toast.error("Failed to load markdown file");
+    }
+  };
+
+  const handleSearchInPDF = async () => {
+    if (!pdfSearchQuery.trim()) {
+      toast.warning("Please enter text to search");
+      return;
+    }
+    
+    if (!pdfDoc) {
+      toast.warning("Please load a PDF first");
+      return;
+    }
+    
+    setIsSearching(true);
+    toast.info("Searching across all pages...");
+    
+    try {
+      const results = await searchAcrossAllPages(pdfDoc, pdfSearchQuery, currentScale);
+      setSearchResults(results);
+      
+      if (results.length === 0) {
+        toast.info("No matches found");
+      } else {
+        const uniquePages = new Set(results.map(r => r.page)).size;
+        toast.success(`Found ${results.length} match(es) in ${uniquePages} page(s)`);
+        
+        // Notify parent component
+        if (onSearchInPDF) {
+          onSearchInPDF(results);
+        }
+      }
+    } catch (error) {
+      console.error("Search error:", error);
+      toast.error("Search failed");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const exportAnnotatedPDF = async () => {
+    if (!pdfFile) {
+      toast.error("No PDF loaded");
+      return;
+    }
+    
+    toast.info("Generating annotated PDF...");
+    
+    try {
+      const annotatedPdfBytes = await createAnnotatedPDF(pdfFile, extractions);
+      
+      const blob = new Blob([annotatedPdfBytes as any], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `annotated-${pdfFile.name}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success("Annotated PDF exported");
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("Failed to export PDF");
+    }
+  };
+
   const handleBulkUpdate = (updates: { validation_status?: string; notes?: string }) => {
     if (!onUpdateExtraction) return;
 
@@ -71,9 +171,6 @@ export const TraceLog = ({
       if (updates.validation_status) {
         typedUpdates.validation_status = updates.validation_status as "validated" | "questionable" | "pending";
       }
-      
-      // Note: notes field doesn't exist on ExtractionEntry, so we skip it for now
-      // You may need to add this field to the ExtractionEntry interface if needed
       
       onUpdateExtraction(id, typedUpdates);
     });
@@ -320,8 +417,91 @@ export const TraceLog = ({
           <OCRInfoCard />
         </div>
         
+        {/* Markdown Assistant Section */}
+        <Card className="mb-3 bg-amber-50 border-amber-200">
+          <CardHeader className="pb-2">
+            <h3 className="text-sm font-medium flex items-center gap-2">
+              📝 Markdown Assistant
+            </h3>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <input
+              type="file"
+              accept=".md,.txt"
+              onChange={handleMarkdownUpload}
+              className="hidden"
+              id="markdown-upload"
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => document.getElementById('markdown-upload')?.click()}
+              >
+                Load Markdown
+              </Button>
+              <Button
+                size="sm"
+                variant={searchMode ? "default" : "outline"}
+                onClick={() => setSearchMode(!searchMode)}
+              >
+                <Search className="h-3 w-3 mr-1" />
+                Search Text
+              </Button>
+            </div>
+            {markdownFile && (
+              <p className="text-xs text-muted-foreground">
+                ✓ {markdownFile.name} loaded
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* PDF Search Interface */}
+        {searchMode && (
+          <Card className="mb-3">
+            <CardContent className="pt-4 space-y-2">
+              <Textarea
+                placeholder="Paste or type text to search in PDF..."
+                value={pdfSearchQuery}
+                onChange={(e) => setPdfSearchQuery(e.target.value)}
+                rows={3}
+              />
+              <Button
+                size="sm"
+                onClick={handleSearchInPDF}
+                disabled={!pdfDoc || !pdfSearchQuery.trim() || isSearching}
+                className="w-full"
+              >
+                🔍 Find in PDF
+              </Button>
+              {searchResults.length > 0 && (
+                <div className="max-h-60 overflow-y-auto space-y-1">
+                  {searchResults.map((result, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 border rounded cursor-pointer hover:bg-accent text-xs"
+                      onClick={() => onHighlightSearchResult?.(result, idx)}
+                    >
+                      <strong>Page {result.page} - Match {idx + 1}</strong>
+                      <p className="text-muted-foreground truncate">
+                        ...{result.context}...
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResults.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Found {searchResults.length} matches in {new Set(searchResults.map(r => r.page)).size} pages
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+        
         {/* Export Section */}
-        <Card className="p-3 bg-primary/5 border-primary/20 mb-3">
+        <Card className="p-3 bg-blue-50 border-blue-200 mb-3">
           <h3 className="text-sm font-medium mb-2">Export Options</h3>
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" size="sm" onClick={exportJSON} className="gap-2 text-xs">
@@ -332,24 +512,36 @@ export const TraceLog = ({
               <FileSpreadsheet className="h-3 w-3" />
               CSV
             </Button>
-            <Button variant="outline" size="sm" onClick={exportAudit} className="gap-2 text-xs col-span-2">
+            <Button variant="outline" size="sm" onClick={exportAudit} className="gap-2 text-xs">
               <FileText className="h-3 w-3" />
-              Audit Report
+              Audit
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportAnnotatedPDF} disabled={!pdfFile || extractions.length === 0} className="gap-2 text-xs">
+              <FileDown className="h-3 w-3" />
+              PDF
             </Button>
           </div>
         </Card>
 
-        {/* Stats */}
-        <div className="flex items-center justify-between text-sm mb-2">
-          <div>
-            <span className="text-muted-foreground">Total:</span>{" "}
-            <span className="font-semibold">{extractions.length}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Pages:</span>{" "}
-            <span className="font-semibold">{new Set(extractions.map((e) => e.page)).size}</span>
-          </div>
-        </div>
+        {/* Statistics */}
+        <Card className="mb-3 bg-slate-50 border-slate-200">
+          <CardContent className="pt-3 space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Total Extractions:</span>
+              <strong className="text-primary">{extractions.length}</strong>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Pages with Data:</span>
+              <strong className="text-primary">{new Set(extractions.map(e => e.page)).size}</strong>
+            </div>
+            {searchResults.length > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Search Matches:</span>
+                <strong className="text-accent-foreground">{searchResults.length}</strong>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Batch detection button */}
         {pdfFile && extractions.length > 0 && (

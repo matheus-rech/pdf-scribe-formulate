@@ -25,6 +25,7 @@ import { useTextHighlights } from "@/hooks/useTextHighlights";
 import { TextHighlight } from "@/types/highlights";
 import { navigateToPosition } from "@/lib/pdfNavigation";
 import type { SourceCitation } from "@/lib/citationDetector";
+import type { SearchResult } from "@/lib/pdfSearch";
 import * as pdfjsLib from "pdfjs-dist";
 import { extractTextWithCoordinates, findTextInRegion, pdfToScreenCoords } from "@/lib/textExtraction";
 
@@ -53,6 +54,9 @@ interface PDFViewerProps {
   isBatchExtracting?: boolean;
   onAnnotationsChange?: (annotations: any[]) => void;
   initialAnnotations?: any[];
+  searchResults?: SearchResult[];
+  activeSearchIndex?: number;
+  pdfDocRef?: React.MutableRefObject<pdfjsLib.PDFDocumentProxy | null>;
 }
 
 export const PDFViewer = ({
@@ -75,7 +79,10 @@ export const PDFViewer = ({
   onBatchExtract,
   isBatchExtracting = false,
   onAnnotationsChange,
-  initialAnnotations = []
+  initialAnnotations = [],
+  searchResults = [],
+  activeSearchIndex = 0,
+  pdfDocRef
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
@@ -92,7 +99,6 @@ export const PDFViewer = ({
   const [importResult, setImportResult] = useState<any>(null);
   const [isLoadingAnnotations, setIsLoadingAnnotations] = useState(false);
   const [pdfFullText, setPdfFullText] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [flashCoords, setFlashCoords] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [hoveredRegion, setHoveredRegion] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -374,7 +380,7 @@ export const PDFViewer = ({
     );
 
     const pageHighlights = getHighlightsForPage(props.pageIndex + 1);
-    const pageSearchResults = searchResults.filter(r => r.page === props.pageIndex + 1 && r.coordinates);
+    const pageSearchResults = searchResults.filter(r => r.page === props.pageIndex + 1 && r.boundingBox);
     const pageSourceHighlights = highlightedSources.filter(s => s.page === props.pageIndex + 1);
 
     return (
@@ -438,7 +444,7 @@ export const PDFViewer = ({
 
         {/* Search Result Highlights */}
         {pageSearchResults.map((result, idx) => {
-          const coords = result.coordinates;
+          const coords = result.boundingBox;
           
           return (
             <div
@@ -455,7 +461,7 @@ export const PDFViewer = ({
                 border: '2px solid hsl(var(--extraction-search))',
                 pointerEvents: 'auto',
               }}
-              title={`Search result: ${result.text}`}
+              title={`Search result: ${result.matchedText}`}
             />
           );
         })}
@@ -556,8 +562,7 @@ export const PDFViewer = ({
   }, [onPageChange]);
 
   // Handle search results with highlight creation
-  const handleSearchResults = useCallback((results: any[]) => {
-    setSearchResults(results);
+  const handleInternalSearchResults = useCallback((results: any[]) => {
     
     // Clear previous search highlights
     clearHighlightsOfType('search');
@@ -1091,12 +1096,12 @@ export const PDFViewer = ({
         {searchOpen && (
           <SearchPanel
             pdfText={pdfFullText}
-            onSearchResult={handleSearchResults}
+            onSearchResult={handleInternalSearchResults}
             onNavigateToResult={handleSearchResultNavigation}
             isOpen={searchOpen}
             onClose={() => {
               setSearchOpen(false);
-              setSearchResults([]);
+              
               clearHighlightsOfType('search');
             }}
             pageTextCache={pageTextCache}

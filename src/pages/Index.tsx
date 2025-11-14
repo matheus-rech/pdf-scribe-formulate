@@ -22,6 +22,8 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import type { ImperativePanelHandle } from "react-resizable-panels";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import type { SearchResult } from "@/lib/pdfSearch";
+import * as pdfjsLib from 'pdfjs-dist';
 
 export interface ExtractionEntry {
   id: string;
@@ -57,6 +59,11 @@ const Index = () => {
   const [loadedAnnotations, setLoadedAnnotations] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const annotationSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
+  
+  // PDF search state
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [activeSearchIndex, setActiveSearchIndex] = useState<number>(0);
   
   // Panel collapse states
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(() => {
@@ -279,6 +286,20 @@ const Index = () => {
 
   const handleClearSourceHighlights = () => {
     setHighlightedSources([]);
+  };
+
+  const handleSearchResults = (results: SearchResult[]) => {
+    setSearchResults(results);
+    setActiveSearchIndex(0);
+    if (results.length > 0) {
+      // Navigate to first result
+      setCurrentPage(results[0].page);
+    }
+  };
+
+  const handleHighlightSearchResult = (result: SearchResult, index: number) => {
+    setActiveSearchIndex(index);
+    setCurrentPage(result.page);
   };
 
   const handleJumpToCitation = (citation: SourceCitation) => {
@@ -560,6 +581,9 @@ const Index = () => {
             isBatchExtracting={isBatchExtracting}
             onAnnotationsChange={handleAnnotationsChange}
             initialAnnotations={loadedAnnotations}
+            searchResults={searchResults}
+            activeSearchIndex={activeSearchIndex}
+            pdfDocRef={pdfDocRef}
             />
           </div>
         </ResizablePanel>
@@ -654,6 +678,10 @@ const Index = () => {
               onJumpToCitation={handleJumpToCitation}
               pdfFile={pdfFile}
               currentStudy={currentStudy}
+              onSearchInPDF={handleSearchResults}
+              onHighlightSearchResult={handleHighlightSearchResult}
+              pdfDoc={pdfDocRef.current}
+              currentScale={scale}
             />
           </div>
         </ResizablePanel>
