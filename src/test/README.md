@@ -2,9 +2,16 @@
 
 ## Overview
 
-This project uses **Vitest** for unit and integration testing, **React Testing Library** for component testing, and **MSW (Mock Service Worker)** for API mocking.
+This project has comprehensive test coverage using:
+
+- **Vitest** - Unit and integration testing
+- **React Testing Library** - Component testing
+- **MSW (Mock Service Worker)** - API mocking
+- **Playwright** - End-to-end (E2E) testing
 
 ## Running Tests
+
+### Unit & Integration Tests
 
 ```bash
 # Run all tests
@@ -24,6 +31,34 @@ npm test textChunkIndexing.test.ts
 
 # Run tests matching a pattern
 npm test -- --grep "citation"
+```
+
+### E2E Tests (Playwright)
+
+```bash
+# Install Playwright browsers (first time only)
+npx playwright install
+
+# Run all E2E tests
+npx playwright test
+
+# Run E2E tests in UI mode (interactive)
+npx playwright test --ui
+
+# Run specific test file
+npx playwright test pdf-upload
+
+# Run in headed mode (see browser)
+npx playwright test --headed
+
+# Run in debug mode
+npx playwright test --debug
+
+# Run specific browser
+npx playwright test --project=chromium
+
+# Generate test report
+npx playwright show-report
 ```
 
 ## Test Structure
@@ -70,6 +105,25 @@ it('should call onClick when clicked', () => {
 Location: `src/test/integration/*.test.tsx`
 
 Test complete workflows with MSW mocking Supabase API calls.
+
+### E2E Tests (Playwright)
+Location: `e2e/tests/*.spec.ts`
+
+Test complete user workflows in real browser environment. Covers:
+- PDF upload and processing
+- Multi-step data extraction
+- Citation detection and validation
+- Multi-reviewer consensus workflow
+
+**Example:**
+```typescript
+// e2e/tests/pdf-upload.spec.ts
+test('should upload PDF successfully', async ({ page }) => {
+  await page.goto('/')
+  await uploadPDF(page, 'sample-study.pdf')
+  await expect(page.getByText(/uploaded successfully/i)).toBeVisible()
+})
+```
 
 **Example:**
 ```typescript
@@ -144,6 +198,35 @@ export const handlers = [
 - **Components**: >80% coverage
 - **Integration**: Key workflows covered
 - **Hooks**: >85% coverage
+- **E2E**: Critical user paths covered
+
+## E2E Test Workflows Covered
+
+1. **PDF Upload & Processing**
+   - File upload validation
+   - PDF parsing and text extraction
+   - Figure and table detection
+   - Progress indicators
+
+2. **Data Extraction Workflow**
+   - Multi-step form navigation
+   - AI-powered field extraction
+   - Manual data entry
+   - Save and resume progress
+
+3. **Citation Detection & Validation**
+   - Automatic citation detection
+   - Source text highlighting
+   - Navigation to PDF source
+   - Batch validation
+   - Confidence scoring
+
+4. **Multi-Reviewer Consensus**
+   - Reviewer configuration
+   - Concurrent extractions
+   - Conflict detection
+   - Consensus calculation
+   - Human review workflow
 
 ## CI/CD
 
@@ -180,6 +263,18 @@ npm run test:ui
 - Verify URL matches exactly
 - Check that server is started in `beforeAll`
 - Ensure handlers are reset in `afterEach`
+
+### "Playwright test fails"
+- Ensure dev server is running
+- Check element selectors are correct
+- Use `--headed` to see what's happening
+- Check screenshot in `test-results/` folder
+- Verify authentication state is saved
+
+### "Cannot find test fixture"
+- Add sample PDFs to `e2e/fixtures/`
+- Check file paths in test code
+- Ensure fixtures are not in `.gitignore`
 
 ## Resources
 

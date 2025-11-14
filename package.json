@@ -11,8 +11,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@axe-core/playwright": "^4.11.0",
     "@hookform/resolvers": "^3.10.0",
     "@huggingface/transformers": "^3.7.6",
+    "@playwright/test": "^1.56.1",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-aspect-ratio": "^1.1.7",

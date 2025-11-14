@@ -1,0 +1,15 @@
+# Playwright artifacts
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Authentication state
+.auth/
+
+# Screenshots (unless needed for documentation)
+screenshots/*.png
+!screenshots/.gitkeep
+
+# Large test fixtures (add specific files if needed)
+fixtures/*.pdf
+!fixtures/README.md
