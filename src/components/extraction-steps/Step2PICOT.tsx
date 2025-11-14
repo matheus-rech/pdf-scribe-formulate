@@ -294,7 +294,6 @@ export const Step2PICOT = ({ formData, onUpdate, onFieldFocus, pdfText, studyId 
             <SelectValue placeholder="Select..." />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Select...</SelectItem>
             <SelectItem value="true">Yes</SelectItem>
             <SelectItem value="false">No (Stop Extraction)</SelectItem>
           </SelectContent>
