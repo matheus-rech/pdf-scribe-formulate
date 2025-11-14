@@ -7,6 +7,7 @@ import { StudyManager } from "@/components/StudyManager";
 import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
 import { SectionDetectionProgress } from "@/components/SectionDetectionProgress";
 import { PDFProcessingDialog, type ProcessingStatus } from "@/components/PDFProcessingDialog";
+import { BulkReprocessDialog, type BulkReprocessProgress } from "@/components/BulkReprocessDialog";
 import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
 import { toast } from "sonner";
 import { FileText, User, LogOut, ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose } from "lucide-react";
@@ -60,6 +61,14 @@ const Index = () => {
     progress: 0,
     message: 'Starting...'
   });
+  const [bulkReprocessProgress, setBulkReprocessProgress] = useState<BulkReprocessProgress>({
+    total: 0,
+    completed: 0,
+    failed: 0,
+    results: []
+  });
+  const [showBulkReprocess, setShowBulkReprocess] = useState(false);
+  const [isBulkReprocessComplete, setIsBulkReprocessComplete] = useState(false);
   const [highlightedSources, setHighlightedSources] = useState<SourceCitation[]>([]);
   const [pdfAnnotations, setPdfAnnotations] = useState<any[]>([]);
   const [loadedAnnotations, setLoadedAnnotations] = useState<any[]>([]);
@@ -112,6 +121,7 @@ const Index = () => {
     getAllStudies,
     loadStudyPdf,
     reprocessStudy,
+    bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
   } = useStudyStorage(userId);
@@ -447,6 +457,33 @@ const Index = () => {
     }, 2000);
   };
 
+  // Handle bulk reprocess
+  const handleBulkReprocess = async () => {
+    setShowBulkReprocess(true);
+    setIsBulkReprocessComplete(false);
+
+    await bulkReprocessStudies((progress) => {
+      setBulkReprocessProgress(progress);
+    });
+
+    setIsBulkReprocessComplete(true);
+    
+    // Refresh studies list
+    const updatedStudies = await getAllStudies();
+    setStudies(updatedStudies);
+  };
+
+  const handleCloseBulkReprocess = () => {
+    setShowBulkReprocess(false);
+    setBulkReprocessProgress({
+      total: 0,
+      completed: 0,
+      failed: 0,
+      results: []
+    });
+    setIsBulkReprocessComplete(false);
+  };
+
   if (!user) {
     return null; // Will redirect to auth
   }
@@ -519,6 +556,7 @@ const Index = () => {
               onStudySelect={handleStudySelect}
               onNewStudy={handleNewStudy}
               onReprocessStudy={handleReprocessStudy}
+              onBulkReprocess={handleBulkReprocess}
               isReprocessing={isReprocessing}
             />
 
@@ -703,6 +741,14 @@ const Index = () => {
       
       {/* PDF Processing Progress Dialog */}
       <PDFProcessingDialog open={isCreatingStudy} status={processingStatus} />
+      
+      {/* Bulk Reprocess Progress Dialog */}
+      <BulkReprocessDialog 
+        open={showBulkReprocess} 
+        progress={bulkReprocessProgress}
+        onClose={handleCloseBulkReprocess}
+        isComplete={isBulkReprocessComplete}
+      />
     </div>
     </TooltipProvider>
   );

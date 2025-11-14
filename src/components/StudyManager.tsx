@@ -28,6 +28,7 @@ interface StudyManagerProps {
   onStudySelect: (studyId: string) => void;
   onNewStudy: () => void;
   onReprocessStudy?: (studyId: string) => void;
+  onBulkReprocess?: () => void;
   isReprocessing?: boolean;
 }
 
@@ -37,9 +38,18 @@ export const StudyManager = ({
   onStudySelect,
   onNewStudy,
   onReprocessStudy,
+  onBulkReprocess,
   isReprocessing = false,
 }: StudyManagerProps) => {
   const hasChunks = currentStudy?.pdf_chunks?.pageChunks?.length > 0;
+  const studiesNeedingReprocess = studies.filter(
+    study => !study.pdf_chunks || 
+      typeof study.pdf_chunks !== 'object' ||
+      !('pageChunks' in study.pdf_chunks) || 
+      !(study.pdf_chunks as any).pageChunks || 
+      (study.pdf_chunks as any).pageChunks.length === 0
+  ).length;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -47,6 +57,18 @@ export const StudyManager = ({
           Meta-Analysis Studies ({studies.length})
         </h3>
         <div className="flex gap-2">
+          {studiesNeedingReprocess > 0 && onBulkReprocess && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onBulkReprocess}
+              className="gap-2"
+              title={`Reprocess ${studiesNeedingReprocess} studies with missing chunks`}
+            >
+              <RefreshCw className="h-3 w-3" />
+              Bulk Process ({studiesNeedingReprocess})
+            </Button>
+          )}
           {currentStudy && onReprocessStudy && (
             <Button
               variant="outline"
