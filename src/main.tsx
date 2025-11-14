@@ -9,6 +9,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 // Render React app first
 createRoot(document.getElementById("root")!).render(<App />);
 
+// Temporarily disable service worker - will re-enable once app is stable
+/*
 // Register service worker after React is mounted
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
@@ -39,6 +41,18 @@ if ('serviceWorker' in navigator) {
       });
     } catch (error) {
       console.error('Service Worker error:', error);
+    }
+  });
+}
+*/
+
+// Clear any existing service workers immediately
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister().then(() => {
+        console.log('Service worker unregistered');
+      });
     }
   });
 }
