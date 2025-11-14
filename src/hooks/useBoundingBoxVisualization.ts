@@ -225,34 +225,45 @@ export const useBoundingBoxVisualization = ({
       const pageFigures = figures.filter((f) => f.page_number === pageNum);
 
       pageFigures.forEach((figure, idx) => {
-        if (!figure.width || !figure.height) return;
+        // Use actual coordinates if available, otherwise skip
+        if (!figure.x && figure.x !== 0) return;
+        if (!figure.bbox_width || !figure.bbox_height) return;
 
-        // For now, we don't have exact coordinates, so we'll render a placeholder
-        // In a real implementation, you'd need to store figure coordinates during extraction
         ctx.strokeStyle = "rgba(147, 51, 234, 0.8)"; // Purple
         ctx.lineWidth = 3;
         ctx.setLineDash([5, 5]); // Dashed line
 
-        // Estimate position (this is a placeholder - you'd need actual coordinates)
-        const estimatedX = 50;
-        const estimatedY = 50 + idx * 200;
-
+        // Use actual stored coordinates from PDF extraction
         ctx.strokeRect(
-          estimatedX * scale,
-          estimatedY * scale,
-          figure.width * (scale / 2),
-          figure.height * (scale / 2)
+          figure.x * scale,
+          figure.y * scale,
+          figure.bbox_width * scale,
+          figure.bbox_height * scale
         );
 
         ctx.setLineDash([]); // Reset dash
 
-        // Add figure label
-        ctx.fillStyle = "rgba(147, 51, 234, 0.9)";
+        // Add figure label with background for better visibility
+        const label = figure.figure_id || `Figure ${idx + 1}`;
         ctx.font = "bold 14px sans-serif";
+        const textMetrics = ctx.measureText(label);
+        const textWidth = textMetrics.width;
+        
+        // Draw background rectangle
+        ctx.fillStyle = "rgba(147, 51, 234, 0.9)";
+        ctx.fillRect(
+          figure.x * scale,
+          figure.y * scale - 22,
+          textWidth + 10,
+          20
+        );
+        
+        // Draw text
+        ctx.fillStyle = "white";
         ctx.fillText(
-          figure.figure_id || `Figure ${idx + 1}`,
-          estimatedX * scale + 5,
-          estimatedY * scale + 20
+          label,
+          figure.x * scale + 5,
+          figure.y * scale - 6
         );
       });
     },

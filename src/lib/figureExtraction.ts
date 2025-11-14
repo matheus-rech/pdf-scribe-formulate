@@ -11,6 +11,8 @@ export interface ExtractedFigure {
   dataUrl: string;
   width: number;
   height: number;
+  x: number;
+  y: number;
   extractionMethod: string;
   metadata: {
     imageName: string;
@@ -224,12 +226,36 @@ export const extractFiguresFromPage = async (
               try {
                 const dataUrl = convertImageDataToCanvas(image);
 
+                // Extract position from transform matrix
+                // Look backwards for recent transform operations (cm, Tm, etc.)
+                let x = 0;
+                let y = 0;
+                const viewport = page.getViewport({ scale: 1.0 });
+                
+                // Search backwards up to 20 operators to find transform
+                for (let j = Math.max(0, i - 20); j < i; j++) {
+                  const prevOp = ops.fnArray[j];
+                  const prevArgs = ops.argsArray[j];
+                  
+                  // OPS.transform = 19 (cm operator)
+                  // OPS.setMatrix = 20 (Tm operator)
+                  if ((prevOp === 19 || prevOp === 20) && prevArgs && prevArgs.length >= 6) {
+                    // Transform matrix: [a, b, c, d, e, f]
+                    // e = x translation, f = y translation
+                    x = prevArgs[4] || 0;
+                    y = viewport.height - (prevArgs[5] || 0) - image.height; // Convert to top-left origin
+                    break;
+                  }
+                }
+
                 figures.push({
                   id: `fig-${pageNum}-${figures.length + 1}`,
                   pageNum: pageNum,
                   dataUrl: dataUrl,
                   width: image.width,
                   height: image.height,
+                  x,
+                  y,
                   extractionMethod: 'PDF.js Operator List',
                   metadata: {
                     imageName,
