@@ -645,7 +645,8 @@ const Index = () => {
             searchResults={searchResults}
             activeSearchIndex={activeSearchIndex}
             pdfDocRef={pdfDocRef}
-            />
+            extractedFigures={extractedFigures}
+          />
           </div>
         </ResizablePanel>
 
