@@ -102,12 +102,6 @@ export function ExtractionDebugPanel({ studyId, onReextract, onReextractChunks, 
       });
 
       if (result.success) {
-        // Reload stats after successful re-extraction
-        const { data: chunksData } = await supabase
-          .from('pdf_text_chunks' as any)
-          .select('id', { count: 'exact' })
-          .eq('study_id', studyId);
-
         setStats(prev => ({
           ...prev,
           chunks: { found: result.chunks, saved: result.chunks, loading: false }
@@ -138,17 +132,6 @@ export function ExtractionDebugPanel({ studyId, onReextract, onReextractChunks, 
       });
 
       if (result.success) {
-        // Reload stats after successful re-extraction
-        const { data: figuresData } = await supabase
-          .from('pdf_figures' as any)
-          .select('id', { count: 'exact' })
-          .eq('study_id', studyId);
-        
-        const { data: tablesData } = await supabase
-          .from('pdf_tables' as any)
-          .select('id', { count: 'exact' })
-          .eq('study_id', studyId);
-
         setStats(prev => ({
           ...prev,
           figures: { found: result.figures, saved: result.figures, loading: false },
@@ -297,13 +280,6 @@ export function ExtractionDebugPanel({ studyId, onReextract, onReextractChunks, 
                       });
 
                       if (result.success) {
-                        // Reload all stats after successful re-extraction
-                        const [figuresData, tablesData, chunksData] = await Promise.all([
-                          supabase.from('pdf_figures' as any).select('id', { count: 'exact' }).eq('study_id', studyId),
-                          supabase.from('pdf_tables' as any).select('id', { count: 'exact' }).eq('study_id', studyId),
-                          supabase.from('pdf_text_chunks' as any).select('id', { count: 'exact' }).eq('study_id', studyId)
-                        ]);
-
                         setStats(prev => ({
                           ...prev,
                           figures: { found: result.figures, saved: result.figures, loading: false },
