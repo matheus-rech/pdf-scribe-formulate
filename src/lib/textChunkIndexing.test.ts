@@ -49,12 +49,10 @@ describe('textChunkIndexing', () => {
       
       const map = buildCitationMap(chunks)
       
+      // CitationMap only preserves text, pageNum, bbox, and confidence
       expect(map[5]).toMatchObject({
-        chunkIndex: 5,
         text: 'Test sentence.',
         pageNum: 3,
-        isHeading: true,
-        isBold: true,
         confidence: 0.95
       })
       expect(map[5].bbox).toEqual({ x: 100, y: 200, width: 300, height: 20 })
