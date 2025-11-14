@@ -16,9 +16,10 @@ interface ExtractionStats {
 interface ExtractionDebugPanelProps {
   studyId: string;
   onReextract?: (studyId: string, onProgress: (message: string) => void) => Promise<{ figures: number; tables: number; success: boolean }>;
+  onReextractChunks?: (studyId: string, onProgress: (message: string) => void) => Promise<{ chunks: number; success: boolean }>;
 }
 
-export function ExtractionDebugPanel({ studyId, onReextract }: ExtractionDebugPanelProps) {
+export function ExtractionDebugPanel({ studyId, onReextract, onReextractChunks }: ExtractionDebugPanelProps) {
   const [stats, setStats] = useState<ExtractionStats>({
     figures: { found: 0, saved: 0, loading: true },
     tables: { found: 0, saved: 0, loading: true },
@@ -26,7 +27,9 @@ export function ExtractionDebugPanel({ studyId, onReextract }: ExtractionDebugPa
     citations: { withCitations: 0, total: 0, loading: true },
   });
   const [isReextracting, setIsReextracting] = useState(false);
+  const [isReextractingChunks, setIsReextractingChunks] = useState(false);
   const [reextractProgress, setReextractProgress] = useState<string>('');
+  const [reextractChunksProgress, setReextractChunksProgress] = useState<string>('');
 
   useEffect(() => {
     const loadStats = async () => {
@@ -80,6 +83,42 @@ export function ExtractionDebugPanel({ studyId, onReextract }: ExtractionDebugPa
 
     loadStats();
   }, [studyId]);
+
+  const handleReextractChunks = async () => {
+    if (!onReextractChunks) {
+      toast.error('Text chunk re-extraction function not available');
+      return;
+    }
+
+    setIsReextractingChunks(true);
+    setReextractChunksProgress('Starting text chunk re-extraction...');
+
+    try {
+      const result = await onReextractChunks(studyId, (message) => {
+        setReextractChunksProgress(message);
+      });
+
+      if (result.success) {
+        // Reload stats after successful re-extraction
+        const { data: chunksData } = await supabase
+          .from('pdf_text_chunks' as any)
+          .select('id', { count: 'exact' })
+          .eq('study_id', studyId);
+
+        setStats(prev => ({
+          ...prev,
+          chunks: { found: result.chunks, saved: result.chunks, loading: false }
+        }));
+
+        setReextractChunksProgress('');
+      }
+    } catch (error: any) {
+      console.error('Text chunk re-extraction error:', error);
+      setReextractChunksProgress('');
+    } finally {
+      setIsReextractingChunks(false);
+    }
+  };
 
   const handleReextract = async () => {
     if (!onReextract) {
@@ -235,35 +274,66 @@ export function ExtractionDebugPanel({ studyId, onReextract }: ExtractionDebugPa
             )}
           </p>
 
-          {/* Re-extraction Button */}
-          {onReextract && (stats.figures.saved === 0 || stats.tables.saved === 0) && (
-            <div className="space-y-2">
-              <Button
-                onClick={handleReextract}
-                disabled={isReextracting}
-                variant="outline"
-                size="sm"
-                className="w-full"
-              >
-                {isReextracting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {reextractProgress || 'Re-extracting...'}
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Re-extract Figures & Tables
-                  </>
+          {/* Re-extraction Buttons */}
+          <div className="space-y-2">
+            {onReextract && (stats.figures.saved === 0 || stats.tables.saved === 0) && (
+              <div className="space-y-2">
+                <Button
+                  onClick={handleReextract}
+                  disabled={isReextracting || isReextractingChunks}
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  {isReextracting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {reextractProgress || 'Re-extracting...'}
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Re-extract Figures & Tables
+                    </>
+                  )}
+                </Button>
+                {isReextracting && reextractProgress && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    {reextractProgress}
+                  </p>
                 )}
-              </Button>
-              {isReextracting && reextractProgress && (
-                <p className="text-xs text-muted-foreground text-center">
-                  {reextractProgress}
-                </p>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+            
+            {onReextractChunks && stats.chunks.saved === 0 && (
+              <div className="space-y-2">
+                <Button
+                  onClick={handleReextractChunks}
+                  disabled={isReextractingChunks || isReextracting}
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  {isReextractingChunks ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {reextractChunksProgress || 'Re-extracting...'}
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Re-extract Text Chunks
+                    </>
+                  )}
+                </Button>
+                {isReextractingChunks && reextractChunksProgress && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    {reextractChunksProgress}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -130,6 +130,7 @@ const Index = () => {
     loadStudyPdf,
     reprocessStudy,
     reextractVisuals,
+    reextractTextChunks,
     bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
@@ -614,6 +615,7 @@ const Index = () => {
               <ExtractionDebugPanel 
                 studyId={currentStudy.id} 
                 onReextract={reextractVisuals}
+                onReextractChunks={reextractTextChunks}
               />
             )}
               </div>
