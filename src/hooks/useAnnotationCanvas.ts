@@ -215,16 +215,18 @@ export const useAnnotationCanvas = (
       if (polygonPoints.current.length > 1) {
         const points = polygonPoints.current;
         const lastTwo = points.slice(-2);
-        const line = new Line(
-          [lastTwo[0].x, lastTwo[0].y, lastTwo[1].x, lastTwo[1].y],
-          {
-            stroke: drawingColor,
-            strokeWidth,
-            selectable: false,
-            evented: false,
-          }
-        );
-        fabricCanvas.add(line);
+        if (lastTwo[0] && lastTwo[1]) {
+          const line = new Line(
+            [lastTwo[0].x, lastTwo[0].y, lastTwo[1].x, lastTwo[1].y],
+            {
+              stroke: drawingColor,
+              strokeWidth,
+              selectable: false,
+              evented: false,
+            }
+          );
+          fabricCanvas.add(line);
+        }
       }
       
       fabricCanvas.renderAll();

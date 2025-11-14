@@ -83,7 +83,7 @@ export const AIReviewComparison = ({ reviews, consensus, fieldName }: AIReviewCo
             {/* Individual Reviews */}
             <div className="space-y-3">
               <h4 className="text-sm font-semibold">Individual AI Opinions</h4>
-              {reviews.map((review, index) => {
+              {reviews.map((review) => {
                 const fieldValue = review.data?.[fieldName];
                 const isConsensusMatch = fieldConsensus && 
                   JSON.stringify(fieldValue) === JSON.stringify(fieldConsensus.value);

@@ -140,14 +140,18 @@ function extractTextFromRegion(
     const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
     const itemX = tx[4];
     const itemY = tx[5];
-    const itemHeight = Math.abs(tx[0]);
 
     // Check if text item intersects with annotation rectangle
+    const x1Val = x1 ?? 0;
+    const x2Val = x2 ?? 0;
+    const y1Val = y1 ?? 0;
+    const y2Val = y2 ?? 0;
+    
     if (
-      itemX >= x1 &&
-      itemX <= x2 &&
-      viewport.height - itemY >= y1 &&
-      viewport.height - itemY <= y2
+      itemX >= x1Val &&
+      itemX <= x2Val &&
+      viewport.height - itemY >= y1Val &&
+      viewport.height - itemY <= y2Val
     ) {
       texts.push(item.str);
     }

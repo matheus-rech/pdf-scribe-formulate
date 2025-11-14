@@ -39,11 +39,11 @@ describe('Citation Rendering Utilities', () => {
     const map = buildCitationMap(chunks)
     
     expect(map[0]).toBeDefined()
-    expect(map[0].text).toBe('First citation')
-    expect(map[0].pageNum).toBe(1)
+    expect(map[0]?.text).toBe('First citation')
+    expect(map[0]?.pageNum).toBe(1)
     expect(map[5]).toBeDefined()
-    expect(map[5].text).toBe('Fifth citation')
-    expect(map[5].pageNum).toBe(2)
+    expect(map[5]?.text).toBe('Fifth citation')
+    expect(map[5]?.pageNum).toBe(2)
   })
 
   it('should create citable document with indices', () => {
@@ -114,7 +114,7 @@ describe('Citation Rendering Utilities', () => {
     const map = buildCitationMap([highConfidence, lowConfidence])
     
     // Should preserve confidence scores for rendering decisions
-    expect(map[0].confidence).toBe(0.95)
-    expect(map[1].confidence).toBe(0.55)
+    expect(map[0]?.confidence).toBe(0.95)
+    expect(map[1]?.confidence).toBe(0.55)
   })
 })

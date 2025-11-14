@@ -1,6 +1,5 @@
 import { Link2 } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
-import type { SourceCitation } from "@/lib/citationDetector";
 
 interface CitationLinkPanelProps {
   extractions: ExtractionEntry[];

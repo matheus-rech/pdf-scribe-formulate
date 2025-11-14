@@ -149,7 +149,7 @@ export const useBoundingBoxVisualization = ({
 
           const firstItem = sentenceItems[0];
           const fontSize = Math.sqrt(
-            firstItem.fontName?.toLowerCase().includes("bold") ? 16 : 12
+            firstItem?.fontName?.toLowerCase().includes("bold") ? 16 : 12
           );
 
           chunks.push({
@@ -162,7 +162,7 @@ export const useBoundingBoxVisualization = ({
             },
             isHeading:
               fontSize > 14 ||
-              firstItem.fontName?.toLowerCase().includes("heading"),
+              (firstItem?.fontName?.toLowerCase().includes("heading") ?? false),
           });
 
           currentSentence = "";
@@ -366,7 +366,7 @@ export const useBoundingBoxVisualization = ({
         const chunk = currentPageChunks.find((c: any) => c.chunk_index === chunkIndex);
         if (!chunk) return;
 
-        const color = colors[idx % colors.length];
+        const color = colors[idx % colors.length] ?? 'rgba(59, 130, 246, 0.4)';
         const borderColor = color.replace('0.4', '0.8');
 
         // Draw highlight rectangle

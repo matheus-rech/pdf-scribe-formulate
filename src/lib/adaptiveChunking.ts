@@ -234,11 +234,15 @@ export function mergeOverlappingChunks(chunks: TextChunk[]): string {
   // Sort by start index
   const sorted = [...chunks].sort((a, b) => a.startIndex - b.startIndex);
   
-  let merged = sorted[0].text;
-  let lastEnd = sorted[0].endIndex;
+  const firstChunk = sorted[0];
+  if (!firstChunk) return '';
+  
+  let merged = firstChunk.text;
+  let lastEnd = firstChunk.endIndex;
   
   for (let i = 1; i < sorted.length; i++) {
     const chunk = sorted[i];
+    if (!chunk) continue;
     
     if (chunk.startIndex < lastEnd) {
       // Overlapping - only add the non-overlapping part
