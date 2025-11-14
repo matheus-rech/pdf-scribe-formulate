@@ -326,6 +326,137 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
+  // Bulk reprocess all studies with missing chunks
+  const bulkReprocessStudies = async (
+    onProgress?: (progress: {
+      total: number;
+      completed: number;
+      failed: number;
+      current?: string;
+      results: {
+        studyId: string;
+        studyName: string;
+        status: 'pending' | 'processing' | 'success' | 'error';
+        error?: string;
+      }[];
+    }) => void
+  ): Promise<{ success: number; failed: number }> => {
+    if (!userId) {
+      toast.error("User ID required");
+      return { success: 0, failed: 0 };
+    }
+
+    // Get all studies
+    const allStudies = await getAllStudies();
+    
+    // Filter studies with missing chunks
+    const studiesNeedingReprocess = allStudies.filter(
+      study => !study.pdf_chunks || 
+        typeof study.pdf_chunks !== 'object' ||
+        !('pageChunks' in study.pdf_chunks) || 
+        !(study.pdf_chunks as any).pageChunks || 
+        (study.pdf_chunks as any).pageChunks.length === 0
+    );
+
+    if (studiesNeedingReprocess.length === 0) {
+      toast.info("All studies already have chunks!");
+      return { success: 0, failed: 0 };
+    }
+
+    toast.info(`Found ${studiesNeedingReprocess.length} studies needing reprocessing`);
+
+    let completed = 0;
+    let failed = 0;
+    const results: {
+      studyId: string;
+      studyName: string;
+      status: 'pending' | 'processing' | 'success' | 'error';
+      error?: string;
+    }[] = studiesNeedingReprocess.map(study => ({
+      studyId: study.id,
+      studyName: study.name,
+      status: 'pending' as const
+    }));
+
+    // Report initial progress
+    onProgress?.({
+      total: studiesNeedingReprocess.length,
+      completed: 0,
+      failed: 0,
+      results: [...results]
+    });
+
+    // Process each study sequentially
+    for (let i = 0; i < studiesNeedingReprocess.length; i++) {
+      const study = studiesNeedingReprocess[i];
+      
+      // Update status to processing
+      results[i].status = 'processing';
+      onProgress?.({
+        total: studiesNeedingReprocess.length,
+        completed,
+        failed,
+        current: study.name,
+        results: [...results]
+      });
+
+      try {
+        // Load PDF from storage
+        const pdfFile = await loadStudyPdf(study);
+        if (!pdfFile) {
+          throw new Error("Failed to load PDF");
+        }
+
+        // Process PDF
+        const processingResult = await processFullPDF(pdfFile, () => {});
+        const semanticChunks = createSemanticChunks(processingResult.pageChunks);
+        const sections = detectSections(processingResult.pageChunks);
+        
+        const pdfChunks = {
+          ...processingResult,
+          semanticChunks,
+          sections
+        };
+
+        // Update study with new chunks
+        const { error } = await supabase
+          .from("studies")
+          .update({ pdf_chunks: pdfChunks as any })
+          .eq("id", study.id);
+
+        if (error) throw error;
+
+        // Mark as success
+        results[i].status = 'success';
+        completed++;
+        
+        console.log(`✅ Successfully reprocessed: ${study.name}`);
+      } catch (error: any) {
+        console.error(`❌ Failed to reprocess ${study.name}:`, error);
+        results[i].status = 'error';
+        results[i].error = error.message || 'Unknown error';
+        failed++;
+      }
+
+      // Report progress
+      onProgress?.({
+        total: studiesNeedingReprocess.length,
+        completed,
+        failed,
+        current: undefined,
+        results: [...results]
+      });
+    }
+
+    if (failed === 0) {
+      toast.success(`Successfully reprocessed all ${completed} studies!`);
+    } else {
+      toast.warning(`Completed: ${completed} successful, ${failed} failed`);
+    }
+
+    return { success: completed, failed };
+  };
+
   // Save page annotations to database
   const savePageAnnotations = async (studyId: string, annotations: PageAnnotation[]) => {
     if (!userId) {
@@ -387,6 +518,7 @@ export const useStudyStorage = (userId: string | null) => {
     getAllStudies,
     loadStudyPdf,
     reprocessStudy,
+    bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
   };
