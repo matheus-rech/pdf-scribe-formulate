@@ -79,6 +79,8 @@ const initialState: ExtractionFormState = {
   indications: [],
   interventions: [],
   mortalityData: [],
+  mrsData: [],
+  predictors: [],
   isExtractingPICOT: false,
   isExtractingAll: false,
   saveStatus: 'saved',
