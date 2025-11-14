@@ -1,6 +1,7 @@
-const CACHE_NAME = 'pdf-extraction-v2';
-const STATIC_CACHE = 'static-v2';
-const DYNAMIC_CACHE = 'dynamic-v2';
+const CACHE_VERSION = '3';
+const CACHE_NAME = `pdf-extraction-v${CACHE_VERSION}`;
+const STATIC_CACHE = `static-v${CACHE_VERSION}`;
+const DYNAMIC_CACHE = `dynamic-v${CACHE_VERSION}`;
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -59,12 +60,14 @@ self.addEventListener('fetch', (event) => {
   // Network-first for JS/CSS to avoid stale React code
   if (request.destination === 'script' || request.destination === 'style') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-cache' })
         .then((response) => {
-          // Clone and cache the fresh response
-          const responseToCache = response.clone();
-          caches.open(DYNAMIC_CACHE)
-            .then((cache) => cache.put(request, responseToCache));
+          // Only cache successful responses
+          if (response && response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(DYNAMIC_CACHE)
+              .then((cache) => cache.put(request, responseToCache));
+          }
           return response;
         })
         .catch(() => {

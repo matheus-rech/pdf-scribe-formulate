@@ -9,50 +9,39 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 // Render React app first
 createRoot(document.getElementById("root")!).render(<App />);
 
-// Temporarily disable service worker - will re-enable once app is stable
-/*
 // Register service worker after React is mounted
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      // First, unregister any existing service workers to ensure clean slate
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      for (const registration of registrations) {
-        await registration.unregister();
-      }
+      const registration = await navigator.serviceWorker.register('/service-worker.js', {
+        updateViaCache: 'none' // Never use HTTP cache for service worker updates
+      });
       
-      // Now register the new service worker
-      const registration = await navigator.serviceWorker.register('/service-worker.js');
       console.log('Service Worker registered:', registration.scope);
+      
+      // Check for updates immediately
+      registration.update();
+      
+      // Check for updates every 60 seconds
+      setInterval(() => {
+        registration.update();
+      }, 60000);
       
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('New service worker available.');
-              // Optionally reload the page to activate new service worker
-              if (confirm('New version available. Reload to update?')) {
-                window.location.reload();
-              }
+              console.log('New service worker available. Reloading...');
+              // Automatically reload to get the latest version
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+              window.location.reload();
             }
           });
         }
       });
     } catch (error) {
-      console.error('Service Worker error:', error);
-    }
-  });
-}
-*/
-
-// Clear any existing service workers immediately
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister().then(() => {
-        console.log('Service worker unregistered');
-      });
+      console.error('Service Worker registration failed:', error);
     }
   });
 }
