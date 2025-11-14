@@ -20,3 +20,6 @@ verify_jwt = true
 
 [functions.multi-model-extract]
 verify_jwt = true
+
+[functions.verify-sections]
+verify_jwt = true
