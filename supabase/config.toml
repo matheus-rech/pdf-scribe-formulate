@@ -27,5 +27,8 @@ verify_jwt = true
 [functions.generate-summary]
 verify_jwt = false
 
+[functions.generate-field-hints]
+verify_jwt = false
+
 [functions.search-study-metadata]
 verify_jwt = true
