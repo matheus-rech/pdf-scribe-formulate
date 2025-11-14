@@ -1,6 +1,6 @@
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react-swc'
-import path from 'path'
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react-swc';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
@@ -23,15 +23,18 @@ export default defineConfig({
         'src/test/',
         '**/*.stories.tsx',
         '**/*.d.ts',
+        '**/*.config.*',
+        '**/mockData.ts',
+        'src/components/ui/**', // shadcn/ui components (auto-generated)
         'src/integrations/',
         'src/vite-env.d.ts',
         'e2e/'
-      ]
-    }
+      ],
+    },
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
-    }
-  }
-})
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+});

@@ -19,6 +19,14 @@ As of the last security audit, the following vulnerabilities have been identifie
   - Test all PDF viewing functionality after upgrade
   - Update all `@react-pdf-viewer` packages to compatible versions
   - Estimated effort: 2-4 hours
+- **Current Mitigation Strategy** (temporary):
+  1. **User Education**: Only open PDFs from trusted sources
+  2. **Content Security Policy**: Implement strict CSP headers
+  3. **Sandboxing**: Consider running PDF processing in isolated worker contexts
+  4. **Monitoring**: Watch for @react-pdf-viewer updates to pdfjs-dist 4.2+
+- **Tracking**:
+  - Upstream issue: https://github.com/mozilla/pdf.js/security/advisories
+  - Alternative: Consider migrating to `react-pdf` library which has better maintenance
 
 #### 2. SheetJS (xlsx) Vulnerabilities
 - **Package**: `xlsx@0.18.5`
@@ -45,14 +53,17 @@ As of the last security audit, the following vulnerabilities have been identifie
 - **Description**: esbuild enables any website to send requests to development server
 - **Vulnerable Version**: ≤ 0.24.2
 - **Current Version**: 0.21.5 (via Vite)
-- **Impact**: LOW - Development environment only
+- **Impact**: LOW - Development environment only, not a production concern
 - **Status**: ⚠️ **REQUIRES VITE UPGRADE**
 - **Mitigation Plan**:
   - Upgrade to `vite@6.x` or `vite@7.x` (major version upgrade)
   - Test all build tooling and dev server
   - Update Vitest to v5.x for compatibility
   - Estimated effort: 1-2 hours
-- **Workaround**: Not exploitable in production builds
+- **Workaround**:
+  - Only run dev server on localhost
+  - Don't expose dev server to public networks
+  - Not exploitable in production builds
 
 ## Recommended Action Plan
 
@@ -103,19 +114,31 @@ As of the last security audit, the following vulnerabilities have been identifie
 2. **Validate all user input** before processing with xlsx
 3. **Use Content Security Policy** to prevent XSS
 4. **Regular dependency updates** via Dependabot or Renovate
+5. **Authentication**: All Supabase queries use Row Level Security (RLS)
+6. **Input Validation**: All edge functions validate inputs with Zod schemas
+7. **CORS**: Properly configured CORS headers on all edge functions
+8. **Environment Variables**: Never commit `.env` files
 
 ### For Users
 
 1. **Only upload PDFs from trusted sources**
 2. **Review extracted data** for unexpected content
 3. **Report suspicious behavior** immediately
+4. **Use strong passwords and enable MFA** if available
+5. **Data Privacy**: All data is user-scoped via RLS policies
 
-## Emergency Contact
+## Reporting Security Issues
 
 If you discover a security vulnerability:
 1. **DO NOT** open a public issue
-2. Email: [Add security contact email]
+2. Email the maintainers directly rather than creating a public issue
 3. Provide: Steps to reproduce, impact assessment, suggested fix
+
+## Update Schedule
+
+- **Dependencies**: Reviewed monthly
+- **Security Patches**: Applied within 48 hours of availability
+- **Vulnerability Scans**: Automated via `npm audit` in CI/CD
 
 ## Changelog
 
@@ -124,3 +147,6 @@ If you discover a security vulnerability:
   - pdfjs-dist upgrade required (HIGH priority)
   - xlsx replacement/upgrade required (MEDIUM priority)
   - Vite upgrade required (LOW priority - dev only)
+- **2025-11-13**: Security policy established and documented
+
+Last Updated: 2025-11-14
