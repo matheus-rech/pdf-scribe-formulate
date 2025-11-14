@@ -5,6 +5,7 @@ import { PDFViewer } from "@/components/PDFViewer";
 import { TraceLog } from "@/components/TraceLog";
 import { StudyManager } from "@/components/StudyManager";
 import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
+import { SectionDetectionProgress } from "@/components/SectionDetectionProgress";
 import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
 import { toast } from "sonner";
 import { FileText, User, LogOut, ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose } from "lucide-react";
@@ -84,6 +85,9 @@ const Index = () => {
     },
   }, true);
 
+  const [detectedSections, setDetectedSections] = useState<any[]>([]);
+  const [showSectionProgress, setShowSectionProgress] = useState(false);
+
   const {
     currentStudy,
     setCurrentStudy,
@@ -141,10 +145,18 @@ const Index = () => {
     if (pdfFile && totalPages > 0 && isCreatingStudy && !currentStudy) {
       const studyName = pdfFile.name.replace('.pdf', '') || `Study - ${new Date().toLocaleDateString()}`;
       
-      createStudy(studyName, pdfFile, totalPages).then((newStudy) => {
+      setShowSectionProgress(true);
+      
+      createStudy(studyName, pdfFile, totalPages, (sections) => {
+        setDetectedSections(sections);
+      }).then((newStudy) => {
         if (newStudy) {
           getAllStudies().then(setStudies);
           setIsCreatingStudy(false);
+          // Keep section progress visible for a moment
+          setTimeout(() => setShowSectionProgress(false), 3000);
+        } else {
+          setShowSectionProgress(false);
         }
       });
     }
@@ -445,7 +457,16 @@ const Index = () => {
               isReprocessing={isReprocessing}
             />
 
-                <ChunkDebugPanel currentStudy={currentStudy} extractions={extractions} />
+            {showSectionProgress && (
+              <SectionDetectionProgress
+                sections={detectedSections}
+                currentPage={currentPage}
+                totalPages={totalPages}
+                isProcessing={isCreatingStudy}
+              />
+            )}
+
+            <ChunkDebugPanel currentStudy={currentStudy} extractions={extractions} />
               </div>
             </div>
             <ExtractionForm

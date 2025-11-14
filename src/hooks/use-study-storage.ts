@@ -24,7 +24,12 @@ export const useStudyStorage = (userId: string | null) => {
   const [isLoading, setIsLoading] = useState(false);
 
   // Upload PDF to storage and create study record
-  const createStudy = async (name: string, pdfFile: File, totalPages: number) => {
+  const createStudy = async (
+    name: string, 
+    pdfFile: File, 
+    totalPages: number,
+    onSectionDetection?: (sections: any[]) => void
+  ) => {
     if (!userId) {
       toast.error("User ID required - please log in");
       return null;
@@ -54,15 +59,26 @@ export const useStudyStorage = (userId: string | null) => {
         .from('study-pdfs')
         .getPublicUrl(fileName);
 
-      // Pre-process PDF
-      toast.info("Processing PDF text...");
+      // Pre-process PDF with progress updates
+      toast.info("Analyzing PDF structure...");
       
       const processingResult = await processFullPDF(pdfFile, (current, total) => {
         console.log(`Processing page ${current}/${total}`);
+        // Could add progress callback here if needed
       });
       
+      toast.info("Creating semantic chunks...");
       const semanticChunks = createSemanticChunks(processingResult.pageChunks);
+      
+      toast.info("Detecting document sections...");
       const sections = detectSections(processingResult.pageChunks);
+      
+      // Notify callback about detected sections
+      if (onSectionDetection) {
+        onSectionDetection(sections);
+      }
+      
+      console.log(`✨ Section detection complete: Found ${sections.length} sections`, sections);
       
       const pdfChunks = {
         ...processingResult,
@@ -88,7 +104,16 @@ export const useStudyStorage = (userId: string | null) => {
       if (error) throw error;
 
       setCurrentStudy(data);
-      toast.success("Study created and PDF processed");
+      
+      const avgConfidence = Math.round(
+        (sections.reduce((sum: number, s: any) => sum + s.confidence, 0) / sections.length) * 100
+      );
+      
+      toast.success(
+        `Study created! Detected ${sections.length} sections with ${avgConfidence}% confidence`,
+        { duration: 4000 }
+      );
+      
       return data;
     } catch (error: any) {
       console.error("Error creating study:", error);
