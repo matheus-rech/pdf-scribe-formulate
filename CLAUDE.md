@@ -98,6 +98,7 @@ import { exportToExcel } from "@/lib/exportData";
 ### TypeScript Configuration
 ```json
 {
+  "strict": true,
   "noImplicitAny": true,
   "noUnusedParameters": true,
   "noUnusedLocals": true,
@@ -625,7 +626,7 @@ const [isOpen, setIsOpen] = useState(false);
 4. **Maintain backward compatibility**: Consider existing stored data formats
 
 ### Code Review Checklist
-- [ ] TypeScript types defined (even if using `any` temporarily)
+- [ ] TypeScript types properly defined (strict mode - avoid `any` types)
 - [ ] Error handling implemented
 - [ ] Loading states shown to user
 - [ ] Toast notifications for user feedback
