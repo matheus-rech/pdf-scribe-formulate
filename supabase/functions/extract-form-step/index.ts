@@ -11,7 +11,7 @@ const corsHeaders = {
 const ExtractFormStepSchema = z.object({
   stepNumber: z.number().int().min(1).max(8),
   pdfText: z.string().min(1).max(1000000),
-  studyId: z.string().uuid()
+  studyId: z.string().uuid().optional()
 });
 
 serve(async (req) => {
