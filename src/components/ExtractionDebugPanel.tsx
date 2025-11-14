@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CheckCircle2, XCircle, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface ExtractionStats {
   figures: { found: number; saved: number; loading: boolean };
@@ -13,15 +15,18 @@ interface ExtractionStats {
 
 interface ExtractionDebugPanelProps {
   studyId: string;
+  onReextract?: (studyId: string, onProgress: (message: string) => void) => Promise<{ figures: number; tables: number; success: boolean }>;
 }
 
-export function ExtractionDebugPanel({ studyId }: ExtractionDebugPanelProps) {
+export function ExtractionDebugPanel({ studyId, onReextract }: ExtractionDebugPanelProps) {
   const [stats, setStats] = useState<ExtractionStats>({
     figures: { found: 0, saved: 0, loading: true },
     tables: { found: 0, saved: 0, loading: true },
     chunks: { found: 0, saved: 0, loading: true },
     citations: { withCitations: 0, total: 0, loading: true },
   });
+  const [isReextracting, setIsReextracting] = useState(false);
+  const [reextractProgress, setReextractProgress] = useState<string>('');
 
   useEffect(() => {
     const loadStats = async () => {
@@ -75,6 +80,48 @@ export function ExtractionDebugPanel({ studyId }: ExtractionDebugPanelProps) {
 
     loadStats();
   }, [studyId]);
+
+  const handleReextract = async () => {
+    if (!onReextract) {
+      toast.error('Re-extraction function not available');
+      return;
+    }
+
+    setIsReextracting(true);
+    setReextractProgress('Starting re-extraction...');
+
+    try {
+      const result = await onReextract(studyId, (message) => {
+        setReextractProgress(message);
+      });
+
+      if (result.success) {
+        // Reload stats after successful re-extraction
+        const { data: figuresData } = await supabase
+          .from('pdf_figures' as any)
+          .select('id', { count: 'exact' })
+          .eq('study_id', studyId);
+        
+        const { data: tablesData } = await supabase
+          .from('pdf_tables' as any)
+          .select('id', { count: 'exact' })
+          .eq('study_id', studyId);
+
+        setStats(prev => ({
+          ...prev,
+          figures: { found: result.figures, saved: result.figures, loading: false },
+          tables: { found: result.tables, saved: result.tables, loading: false }
+        }));
+
+        setReextractProgress('');
+      }
+    } catch (error: any) {
+      console.error('Re-extraction error:', error);
+      setReextractProgress('');
+    } finally {
+      setIsReextracting(false);
+    }
+  };
 
   const getStatusIcon = (found: number, saved: number, loading: boolean) => {
     if (loading) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
@@ -176,8 +223,8 @@ export function ExtractionDebugPanel({ studyId }: ExtractionDebugPanelProps) {
           </div>
         </div>
 
-        {/* Summary */}
-        <div className="pt-4 border-t border-border/50">
+        {/* Summary and Actions */}
+        <div className="pt-4 border-t border-border/50 space-y-3">
           <p className="text-sm text-muted-foreground">
             {stats.figures.saved === 0 && stats.tables.saved === 0 && stats.chunks.saved === 0 ? (
               <span className="text-destructive font-medium">⚠️ No data extracted. Check console for errors.</span>
@@ -187,6 +234,36 @@ export function ExtractionDebugPanel({ studyId }: ExtractionDebugPanelProps) {
               <span className="text-green-600 font-medium">✓ Extraction working correctly</span>
             )}
           </p>
+
+          {/* Re-extraction Button */}
+          {onReextract && (stats.figures.saved === 0 || stats.tables.saved === 0) && (
+            <div className="space-y-2">
+              <Button
+                onClick={handleReextract}
+                disabled={isReextracting}
+                variant="outline"
+                size="sm"
+                className="w-full"
+              >
+                {isReextracting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {reextractProgress || 'Re-extracting...'}
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Re-extract Figures & Tables
+                  </>
+                )}
+              </Button>
+              {isReextracting && reextractProgress && (
+                <p className="text-xs text-muted-foreground text-center">
+                  {reextractProgress}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

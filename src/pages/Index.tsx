@@ -7,6 +7,7 @@ import { FigureExtractionPanel } from "@/components/FigureExtractionPanel";
 import { TableExtractionPanel } from "@/components/TableExtractionPanel";
 import { StudyManager } from "@/components/StudyManager";
 import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
+import { ExtractionDebugPanel } from "@/components/ExtractionDebugPanel";
 import { SectionDetectionProgress } from "@/components/SectionDetectionProgress";
 import { PDFProcessingDialog, type ProcessingStatus } from "@/components/PDFProcessingDialog";
 import { BulkReprocessDialog, type BulkReprocessProgress } from "@/components/BulkReprocessDialog";
@@ -128,6 +129,7 @@ const Index = () => {
     getAllStudies,
     loadStudyPdf,
     reprocessStudy,
+    reextractVisuals,
     bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
@@ -607,6 +609,13 @@ const Index = () => {
             )}
 
             <ChunkDebugPanel currentStudy={currentStudy} extractions={extractions} />
+            
+            {currentStudy && (
+              <ExtractionDebugPanel 
+                studyId={currentStudy.id} 
+                onReextract={reextractVisuals}
+              />
+            )}
               </div>
             </div>
             <ExtractionForm
