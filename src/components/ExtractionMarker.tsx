@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 
 interface ExtractionMarkerProps {
   extraction: ExtractionEntry;
@@ -85,7 +86,7 @@ export const ExtractionMarker = ({ extraction, onClick }: ExtractionMarkerProps)
           </div>
         </TooltipTrigger>
         <TooltipContent>
-          <div className="space-y-1 text-xs">
+          <div className="space-y-2 text-xs">
             <p className="font-semibold">{extraction.fieldName}</p>
             <p className="text-muted-foreground">Method: {extraction.method}</p>
             <p className="text-muted-foreground">Page: {extraction.page}</p>
@@ -98,6 +99,20 @@ export const ExtractionMarker = ({ extraction, onClick }: ExtractionMarkerProps)
               </p>
             )}
             <p className="max-w-xs line-clamp-2">{extraction.text}</p>
+            
+            {/* Citation Preview */}
+            {extraction.sourceCitations && extraction.sourceCitations.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-border">
+                <p className="text-xs font-medium mb-1">Sources:</p>
+                <div className="flex gap-1 flex-wrap">
+                  {extraction.sourceCitations.map((citation: any, idx: number) => (
+                    <Badge key={idx} variant="secondary" className="text-xs font-mono">
+                      [{citation.chunkIndex || idx}]
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </TooltipContent>
       </Tooltip>

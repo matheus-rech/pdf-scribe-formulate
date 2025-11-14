@@ -378,6 +378,95 @@ export const useStudyStorage = (userId: string | null) => {
         toast.error('Failed to extract tables, but study was created');
       }
 
+      // ========= Phase 3: Text Chunk Extraction with Coordinates =========
+      try {
+        onProgress?.({
+          stage: 'complete',
+          progress: 96,
+          message: 'Extracting text chunks with coordinates...'
+        });
+
+        console.log('📑 Starting text chunk extraction with coordinates...');
+        
+        // Reload PDF for text chunk extraction
+        const chunkPdfDoc = await pdfjsLib.getDocument({
+          data: await pdfFile.arrayBuffer()
+        }).promise;
+
+        const { extractTextWithCoordinates } = await import('@/lib/textChunkIndexing');
+        
+        const allTextChunks: any[] = [];
+        let globalChunkIndex = 0;
+
+        for (let pageNum = 1; pageNum <= chunkPdfDoc.numPages; pageNum++) {
+          const page = await chunkPdfDoc.getPage(pageNum);
+          
+          // Calculate character offset for this page
+          const charOffset = processingResult.pageChunks
+            .slice(0, pageNum - 1)
+            .reduce((sum, chunk) => sum + chunk.text.length, 0);
+          
+          const pageChunks = await extractTextWithCoordinates(page, pageNum, charOffset);
+          
+          // Assign global indices and map to sections
+          pageChunks.forEach(chunk => {
+            chunk.chunkIndex = globalChunkIndex++;
+            
+            // Find section for this chunk
+            if (sections && chunk.charStart !== undefined) {
+              const section = sections.find(
+                (s: any) => chunk.charStart >= s.charStart && chunk.charEnd <= s.charEnd
+              );
+              if (section) {
+                chunk.sectionName = section.type;
+              }
+            }
+            
+            allTextChunks.push(chunk);
+          });
+        }
+
+        console.log(`📊 Text chunk extraction complete: Found ${allTextChunks.length} chunks`);
+
+        // Save chunks to database
+        if (allTextChunks.length > 0) {
+          const chunkRecords = allTextChunks.map(chunk => ({
+            study_id: data.id,
+            user_id: userId,
+            chunk_index: chunk.chunkIndex,
+            page_number: chunk.pageNum,
+            text: chunk.text,
+            sentence_count: 1,
+            x: chunk.bbox.x,
+            y: chunk.bbox.y,
+            width: chunk.bbox.width,
+            height: chunk.bbox.height,
+            char_start: chunk.charStart,
+            char_end: chunk.charEnd,
+            section_name: chunk.sectionName || null,
+            font_name: chunk.fontName,
+            font_size: chunk.fontSize,
+            is_heading: chunk.isHeading,
+            is_bold: chunk.isBold
+          }));
+
+          const { error: chunksError } = await supabase
+            .from('pdf_text_chunks' as any)
+            .insert(chunkRecords as any);
+
+          if (chunksError) {
+            console.error('Error saving text chunks:', chunksError);
+            toast.error('Text chunks extracted but failed to save to database');
+          } else {
+            console.log(`✅ Saved ${allTextChunks.length} text chunks with citation provenance`);
+          }
+        }
+      } catch (chunkError) {
+        console.error('Error extracting text chunks:', chunkError);
+        // Don't fail the entire study creation
+        toast.error('Failed to extract text chunks, but study was created');
+      }
+
       onProgress?.({
         stage: 'complete',
         progress: 100,
