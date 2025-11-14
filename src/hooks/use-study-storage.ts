@@ -348,7 +348,7 @@ export const useStudyStorage = (userId: string | null) => {
                   for (const result of matchData.results) {
                     if (result.caption && !result.error) {
                       await supabase
-                        .from('pdf_tables')
+                        .from('pdf_tables' as any)
                         .update({
                           caption: result.caption,
                           confidence_score: result.confidence,

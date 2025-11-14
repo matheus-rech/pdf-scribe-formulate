@@ -169,14 +169,14 @@ export const PDFViewer = ({
   } = useAnnotationCanvas(drawingCanvasRef, pageDimensions.width, pageDimensions.height, drawingMode);
 
   // Bounding box visualization
-  const { hoveredFigure } = useBoundingBoxVisualization({
+  const { hoveredFigure, hoveredTable } = useBoundingBoxVisualization({
     pdfDoc: pdfDocRef?.current || null,
     currentPage,
     scale,
     visibility: boundingBoxVisibility,
     canvasRef: boundingBoxCanvasRef,
     extractedFigures,
-    extractedTables: [], // TODO: Pass extracted tables when available
+    studyId,
   });
 
   const {
@@ -1340,6 +1340,15 @@ export const PDFViewer = ({
             figure={hoveredFigure.figure}
             x={hoveredFigure.x}
             y={hoveredFigure.y}
+          />
+        )}
+
+        {/* Table Detail Tooltip */}
+        {hoveredTable && (
+          <TableDetailTooltip
+            table={hoveredTable.table}
+            mouseX={hoveredTable.x}
+            mouseY={hoveredTable.y}
           />
         )}
       </div>

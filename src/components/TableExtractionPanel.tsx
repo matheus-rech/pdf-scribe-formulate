@@ -48,7 +48,7 @@ export const TableExtractionPanel: React.FC<TableExtractionPanelProps> = ({
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('pdf_tables')
+        .from('pdf_tables' as any)
         .select('*')
         .eq('study_id', studyId)
         .order('page_number', { ascending: true });
@@ -66,7 +66,7 @@ export const TableExtractionPanel: React.FC<TableExtractionPanelProps> = ({
   const handleDeleteTable = async (tableId: string) => {
     try {
       const { error } = await supabase
-        .from('pdf_tables')
+        .from('pdf_tables' as any)
         .delete()
         .eq('id', tableId);
 
