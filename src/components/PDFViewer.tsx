@@ -19,6 +19,7 @@ import { CitationLinkPanel } from "./CitationLinkPanel";
 import { SectionNavigator } from "./SectionNavigator";
 import { BoundingBoxControls, type BoundingBoxVisibility } from "./BoundingBoxControls";
 import { FigureCaptionTooltip } from "./FigureCaptionTooltip";
+import { TableDetailTooltip } from "./TableDetailTooltip";
 import { useAnnotationCanvas } from "@/hooks/useAnnotationCanvas";
 import { usePageAnnotations } from "@/hooks/usePageAnnotations";
 import { useCanvasHistory } from "@/hooks/useCanvasHistory";
@@ -61,6 +62,7 @@ interface PDFViewerProps {
   activeSearchIndex?: number;
   pdfDocRef?: React.MutableRefObject<pdfjsLib.PDFDocumentProxy | null>;
   extractedFigures?: any[];
+  studyId?: string;
 }
 
 export const PDFViewer = ({
@@ -87,7 +89,8 @@ export const PDFViewer = ({
   searchResults = [],
   activeSearchIndex = 0,
   pdfDocRef,
-  extractedFigures = []
+  extractedFigures = [],
+  studyId
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
