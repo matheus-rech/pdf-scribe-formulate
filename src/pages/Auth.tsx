@@ -22,24 +22,54 @@ const Auth = () => {
   const [otpSent, setOtpSent] = useState(false);
 
   useEffect(() => {
-    // Handle magic link callback (tokens in URL hash)
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    
-    if (accessToken) {
-      // Session is being established, show loading
-      setLoading(true);
-      // The onAuthStateChange will handle navigation once session is ready
-    }
-    
-    // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate("/");
+    const initAuth = async () => {
+      // Handle magic link callback from URL hash
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const type = hashParams.get('type');
+
+      if (accessToken && type === 'magiclink') {
+        setLoading(true);
+        try {
+          // Set the session using the tokens from the URL
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken!,
+          });
+
+          if (error) throw error;
+
+          if (data.session) {
+            // Clear the hash from URL
+            window.location.hash = '';
+            toast({
+              title: "Success",
+              description: "You've been logged in successfully!",
+            });
+            navigate('/');
+            return;
+          }
+        } catch (error: any) {
+          toast({
+            title: "Error",
+            description: error.message || "Failed to authenticate with magic link",
+            variant: "destructive",
+          });
+          setLoading(false);
+        }
       } else {
-        setLoading(false);
+        // Check if user is already logged in
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          navigate("/");
+        } else {
+          setLoading(false);
+        }
       }
-    });
+    };
+
+    initAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -49,7 +79,7 @@ const Auth = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, toast]);
 
 
   const handleMagicLink = async (e: React.FormEvent) => {
@@ -70,6 +100,7 @@ const Auth = () => {
         email: email.trim(),
         options: {
           emailRedirectTo: `${window.location.origin}/auth`,
+          shouldCreateUser: true,
         },
       });
 
@@ -83,7 +114,7 @@ const Auth = () => {
         setEmailSent(true);
         toast({
           title: "Check your email",
-          description: "We sent you a magic link to sign in",
+          description: "Click the link in your email to sign in - you'll be logged in automatically!",
         });
       }
     } catch (error) {
