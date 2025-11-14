@@ -187,14 +187,46 @@ export const useStudyStorage = (userId: string | null) => {
           }));
 
           const { error: figureError } = await supabase
-            .from('pdf_figures')
-            .insert(figureRecords);
+            .from('pdf_figures' as any)
+            .insert(figureRecords as any);
 
           if (figureError) {
             console.error('Error saving figures:', figureError);
             toast.error('Figures extracted but failed to save to database');
           } else {
             console.log(`✅ Saved ${allFigures.length} figures to database`);
+            
+            // Enhance captions with AI for figures on pages with text content
+            onProgress?.({
+              stage: 'complete',
+              progress: 95,
+              message: 'Enhancing figure captions with AI...'
+            });
+
+            try {
+              // Get page text context for each figure
+              const pageTexts = new Map<number, string>();
+              for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                const page = await pdfDoc.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map((item: any) => item.str).join(' ');
+                pageTexts.set(pageNum, pageText);
+              }
+
+              // Enhance captions for each figure (rate-limited batches)
+              const enhancedCount = await enhanceFigureCaptions(
+                data.id,
+                allFigures,
+                pageTexts
+              );
+
+              if (enhancedCount > 0) {
+                console.log(`🤖 AI-enhanced ${enhancedCount}/${allFigures.length} figure captions`);
+              }
+            } catch (aiError) {
+              console.error('Error enhancing captions:', aiError);
+              // Don't fail the entire process if caption enhancement fails
+            }
           }
         }
       } catch (figError) {
@@ -572,11 +604,66 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
+  // Enhance figure captions with AI
+  const enhanceFigureCaptions = async (
+    studyId: string,
+    figures: any[],
+    pageTexts: Map<number, string>
+  ): Promise<number> => {
+    let enhancedCount = 0;
+
+    for (const figure of figures) {
+      try {
+        const pageContext = pageTexts.get(figure.pageNum);
+        if (!pageContext || pageContext.length < 50) {
+          continue; // Skip if no meaningful text on page
+        }
+
+        const { data, error } = await supabase.functions.invoke('enhance-figure-caption', {
+          body: {
+            figureId: figure.id,
+            pageNumber: figure.pageNum,
+            pageContext: pageContext
+          }
+        });
+
+        if (error) {
+          console.error(`Caption enhancement error for ${figure.id}:`, error);
+          continue;
+        }
+
+        if (data?.caption) {
+          // Update figure with AI-enhanced caption
+          const { error: updateError } = await supabase
+            .from('pdf_figures' as any)
+            .update({
+              caption: data.caption,
+              ai_enhanced: true
+            })
+            .eq('study_id', studyId)
+            .eq('figure_id', figure.id);
+
+          if (!updateError) {
+            enhancedCount++;
+          }
+        }
+
+        // Rate limiting: small delay between API calls
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error(`Error enhancing caption for ${figure.id}:`, error);
+        continue;
+      }
+    }
+
+    return enhancedCount;
+  };
+
   // Load extracted figures for a study
   const loadStudyFigures = async (studyId: string) => {
     try {
       const { data, error } = await supabase
-        .from('pdf_figures')
+        .from('pdf_figures' as any)
         .select('*')
         .eq('study_id', studyId)
         .order('page_number', { ascending: true });
