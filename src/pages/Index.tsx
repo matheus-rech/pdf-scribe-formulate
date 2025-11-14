@@ -6,6 +6,7 @@ import { TraceLog } from "@/components/TraceLog";
 import { StudyManager } from "@/components/StudyManager";
 import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
 import { SectionDetectionProgress } from "@/components/SectionDetectionProgress";
+import { PDFProcessingDialog, type ProcessingStatus } from "@/components/PDFProcessingDialog";
 import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
 import { toast } from "sonner";
 import { FileText, User, LogOut, ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose } from "lucide-react";
@@ -54,6 +55,11 @@ const Index = () => {
   const [pdfText, setPdfText] = useState<string>("");
   const [studies, setStudies] = useState<any[]>([]);
   const [isCreatingStudy, setIsCreatingStudy] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>({
+    stage: 'uploading',
+    progress: 0,
+    message: 'Starting...'
+  });
   const [highlightedSources, setHighlightedSources] = useState<SourceCitation[]>([]);
   const [pdfAnnotations, setPdfAnnotations] = useState<any[]>([]);
   const [loadedAnnotations, setLoadedAnnotations] = useState<any[]>([]);
@@ -158,9 +164,17 @@ const Index = () => {
       
       setShowSectionProgress(true);
       
-      createStudy(studyName, pdfFile, totalPages, (sections) => {
-        setDetectedSections(sections);
-      }).then((newStudy) => {
+      createStudy(
+        studyName, 
+        pdfFile, 
+        totalPages,
+        (progress) => {
+          setProcessingStatus(progress);
+        },
+        (sections) => {
+          setDetectedSections(sections);
+        }
+      ).then((newStudy) => {
         if (newStudy) {
           getAllStudies().then(setStudies);
           setIsCreatingStudy(false);
@@ -686,6 +700,9 @@ const Index = () => {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      
+      {/* PDF Processing Progress Dialog */}
+      <PDFProcessingDialog open={isCreatingStudy} status={processingStatus} />
     </div>
     </TooltipProvider>
   );

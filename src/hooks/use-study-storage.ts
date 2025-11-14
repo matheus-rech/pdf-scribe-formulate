@@ -7,6 +7,14 @@ import { createSemanticChunks } from "@/lib/semanticChunking";
 import { detectSections } from "@/lib/sectionDetection";
 import type { PageAnnotation } from "@/hooks/usePageAnnotations";
 
+export interface ProcessingProgress {
+  stage: 'uploading' | 'analyzing' | 'chunking' | 'sections' | 'complete';
+  progress: number;
+  currentPage?: number;
+  totalPages?: number;
+  message: string;
+}
+
 interface Study {
   id: string;
   user_id: string;
@@ -30,6 +38,7 @@ export const useStudyStorage = (userId: string | null) => {
     name: string, 
     pdfFile: File, 
     totalPages: number,
+    onProgress?: (progress: ProcessingProgress) => void,
     onSectionDetection?: (sections: any[]) => void
   ) => {
     if (!userId) {
@@ -39,6 +48,12 @@ export const useStudyStorage = (userId: string | null) => {
 
     setIsLoading(true);
     try {
+      onProgress?.({
+        stage: 'uploading',
+        progress: 5,
+        message: 'Uploading PDF to storage...'
+      });
+
       // Get user email for backwards compatibility with storage paths
       const { data: { user } } = await supabase.auth.getUser();
       const userEmail = user?.email;
@@ -61,18 +76,37 @@ export const useStudyStorage = (userId: string | null) => {
         .from('study-pdfs')
         .getPublicUrl(fileName);
 
-      // Pre-process PDF with progress updates
-      toast.info("Analyzing PDF structure...");
-      
-      const processingResult = await processFullPDF(pdfFile, (current, total) => {
-        console.log(`Processing page ${current}/${total}`);
-        // Could add progress callback here if needed
+      onProgress?.({
+        stage: 'analyzing',
+        progress: 25,
+        message: 'Analyzing PDF structure...',
+        totalPages
       });
       
-      toast.info("Creating semantic chunks...");
+      // Pre-process PDF with progress updates
+      const processingResult = await processFullPDF(pdfFile, (current, total) => {
+        const pageProgress = 25 + (current / total) * 35; // 25-60%
+        onProgress?.({
+          stage: 'analyzing',
+          progress: pageProgress,
+          currentPage: current,
+          totalPages: total,
+          message: `Processing page ${current} of ${total}...`
+        });
+      });
+      
+      onProgress?.({
+        stage: 'chunking',
+        progress: 60,
+        message: 'Creating semantic chunks for AI processing...'
+      });
       const semanticChunks = createSemanticChunks(processingResult.pageChunks);
       
-      toast.info("Detecting document sections...");
+      onProgress?.({
+        stage: 'sections',
+        progress: 85,
+        message: 'Detecting document sections...'
+      });
       const sections = detectSections(processingResult.pageChunks);
       
       // Notify callback about detected sections
@@ -104,6 +138,12 @@ export const useStudyStorage = (userId: string | null) => {
         .single();
 
       if (error) throw error;
+
+      onProgress?.({
+        stage: 'complete',
+        progress: 100,
+        message: 'Study created successfully!'
+      });
 
       setCurrentStudy(data);
       
