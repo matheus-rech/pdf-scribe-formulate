@@ -22,6 +22,17 @@ interface BoundingBoxVisualizationProps {
   studyId?: string;
 }
 
+interface BoundingBoxVisualizationProps {
+  pdfDoc: pdfjsLib.PDFDocumentProxy | null;
+  currentPage: number;
+  scale: number;
+  visibility: BoundingBoxVisibility;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
+  extractedFigures?: any[];
+  studyId?: string;
+  activeCitationIndices?: number[];
+}
+
 export const useBoundingBoxVisualization = ({
   pdfDoc,
   currentPage,
@@ -30,6 +41,7 @@ export const useBoundingBoxVisualization = ({
   canvasRef,
   extractedFigures = [],
   studyId,
+  activeCitationIndices = [],
 }: BoundingBoxVisualizationProps) => {
   const animationFrameRef = useRef<number | null>(null);
   const [hoveredFigure, setHoveredFigure] = useState<{
@@ -43,35 +55,53 @@ export const useBoundingBoxVisualization = ({
     y: number;
   } | null>(null);
   const [extractedTables, setExtractedTables] = useState<any[]>([]);
+  const [textChunks, setTextChunks] = useState<any[]>([]);
 
-  // Fetch tables from database when studyId changes
+  // Fetch tables and text chunks from database when studyId changes
   useEffect(() => {
-    const fetchTables = async () => {
+    const fetchData = async () => {
       if (!studyId) {
         setExtractedTables([]);
+        setTextChunks([]);
         return;
       }
 
       try {
-        const { data, error } = await (supabase as any)
+        // Fetch tables
+        const { data: tablesData, error: tablesError } = await (supabase as any)
           .from('pdf_tables')
           .select('*')
           .eq('study_id', studyId);
 
-        if (error) {
-          console.error('Error fetching tables:', error);
+        if (tablesError) {
+          console.error('Error fetching tables:', tablesError);
           setExtractedTables([]);
         } else {
-          setExtractedTables(data || []);
+          setExtractedTables(tablesData || []);
+        }
+
+        // Fetch text chunks for current page
+        const { data: chunksData, error: chunksError } = await (supabase as any)
+          .from('pdf_text_chunks')
+          .select('*')
+          .eq('study_id', studyId)
+          .eq('page_number', currentPage);
+
+        if (chunksError) {
+          console.error('Error fetching text chunks:', chunksError);
+          setTextChunks([]);
+        } else {
+          setTextChunks(chunksData || []);
         }
       } catch (err) {
-        console.error('Error fetching tables:', err);
+        console.error('Error fetching data:', err);
         setExtractedTables([]);
+        setTextChunks([]);
       }
     };
 
-    fetchTables();
-  }, [studyId]);
+    fetchData();
+  }, [studyId, currentPage]);
 
   /**
    * Extract text items with coordinates from PDF page
@@ -312,6 +342,80 @@ export const useBoundingBoxVisualization = ({
   );
 
   /**
+   * Render citation chunks with highlighting
+   */
+  const renderCitationChunks = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      citationIndices: number[],
+      currentPageChunks: any[]
+    ) => {
+      if (!citationIndices || citationIndices.length === 0) return;
+
+      // Colors for multiple citations
+      const colors = [
+        'rgba(255, 235, 59, 0.4)',   // Yellow
+        'rgba(255, 152, 0, 0.4)',    // Orange
+        'rgba(244, 67, 54, 0.4)',    // Red
+        'rgba(156, 39, 176, 0.4)',   // Purple
+        'rgba(33, 150, 243, 0.4)',   // Blue
+      ];
+
+      // Render each citation
+      citationIndices.forEach((chunkIndex, idx) => {
+        const chunk = currentPageChunks.find((c: any) => c.chunk_index === chunkIndex);
+        if (!chunk) return;
+
+        const color = colors[idx % colors.length];
+        const borderColor = color.replace('0.4', '0.8');
+
+        // Draw highlight rectangle
+        ctx.fillStyle = color;
+        ctx.fillRect(
+          chunk.x * scale,
+          chunk.y * scale,
+          chunk.width * scale,
+          chunk.height * scale
+        );
+
+        // Draw border
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          chunk.x * scale,
+          chunk.y * scale,
+          chunk.width * scale,
+          chunk.height * scale
+        );
+
+        // Draw citation index label
+        ctx.fillStyle = borderColor.replace('0.8', '1.0');
+        ctx.font = 'bold 12px monospace';
+        const label = `[${chunkIndex}]`;
+        const labelWidth = ctx.measureText(label).width;
+        
+        // Background for label
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(
+          chunk.x * scale - 2,
+          chunk.y * scale - 18,
+          labelWidth + 4,
+          16
+        );
+        
+        // Label text
+        ctx.fillStyle = '#FFC107';
+        ctx.fillText(
+          label,
+          chunk.x * scale,
+          chunk.y * scale - 5
+        );
+      });
+    },
+    [scale]
+  );
+
+  /**
    * Main rendering function
    */
   const renderBoundingBoxes = useCallback(async () => {
@@ -324,8 +428,8 @@ export const useBoundingBoxVisualization = ({
     // Clear previous overlays
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // If nothing is visible, return early
-    if (!Object.values(visibility).some(Boolean)) return;
+    // If nothing is visible and no citations, return early
+    if (!Object.values(visibility).some(Boolean) && activeCitationIndices.length === 0) return;
 
     try {
       const page = await pdfDoc.getPage(currentPage);
@@ -361,6 +465,11 @@ export const useBoundingBoxVisualization = ({
       if (visibility.figures && extractedFigures.length > 0) {
         renderFigureBoxes(ctx, extractedFigures, currentPage, scale);
       }
+
+      // Render citation highlights
+      if (activeCitationIndices.length > 0 && textChunks.length > 0) {
+        renderCitationChunks(ctx, activeCitationIndices, textChunks);
+      }
     } catch (error) {
       console.error("Error rendering bounding boxes:", error);
     }
@@ -369,6 +478,8 @@ export const useBoundingBoxVisualization = ({
     currentPage,
     scale,
     visibility,
+    activeCitationIndices,
+    textChunks,
     canvasRef,
     extractedFigures,
     extractedTables,
@@ -378,6 +489,7 @@ export const useBoundingBoxVisualization = ({
     renderSemanticChunkBoxes,
     renderTableBoxes,
     renderFigureBoxes,
+    renderCitationChunks,
   ]);
 
   /**

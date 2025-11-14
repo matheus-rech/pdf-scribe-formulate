@@ -63,6 +63,8 @@ interface PDFViewerProps {
   pdfDocRef?: React.MutableRefObject<pdfjsLib.PDFDocumentProxy | null>;
   extractedFigures?: any[];
   studyId?: string;
+  onNavigateToChunk?: (pageNum: number, chunkIndex: number) => void;
+  activeCitationIndices?: number[];
 }
 
 export const PDFViewer = ({
@@ -90,7 +92,9 @@ export const PDFViewer = ({
   activeSearchIndex = 0,
   pdfDocRef,
   extractedFigures = [],
-  studyId
+  studyId,
+  onNavigateToChunk,
+  activeCitationIndices = [],
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
