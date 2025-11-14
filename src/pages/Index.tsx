@@ -20,6 +20,7 @@ import { AuditReportDialog } from "@/components/AuditReportDialog";
 import { BatchRevalidationDialog } from "@/components/BatchRevalidationDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { BulkStudyExportDialog } from "@/components/BulkStudyExportDialog";
+import { SourceProvenancePanel } from "@/components/SourceProvenancePanel";
 import { supabase } from "@/integrations/supabase/client";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -115,6 +116,8 @@ const Index = () => {
   const [detectedSections, setDetectedSections] = useState<any[]>([]);
   const [showSectionProgress, setShowSectionProgress] = useState(false);
   const [extractedFigures, setExtractedFigures] = useState<any[]>([]);
+  const [activeCitationIndices, setActiveCitationIndices] = useState<number[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("trace");
 
   const {
     currentStudy,
@@ -338,6 +341,30 @@ const Index = () => {
 
   const handleJumpToCitation = (citation: SourceCitation) => {
     setCurrentPage(citation.page);
+  };
+
+  // Handle navigation to chunk citation
+  const handleNavigateToChunk = async (pageNum: number, chunkIndex: number) => {
+    try {
+      // Navigate to page
+      setCurrentPage(pageNum);
+      
+      // Set active citation for highlighting
+      setActiveCitationIndices([chunkIndex]);
+      
+      // Switch to trace/citations tab if not already visible
+      setActiveTab("citations");
+      
+      toast.success(`Jumped to citation [${chunkIndex}] on page ${pageNum}`);
+      
+      // Clear after 3 seconds
+      setTimeout(() => {
+        setActiveCitationIndices([]);
+      }, 3000);
+    } catch (error) {
+      console.error("Error navigating to chunk:", error);
+      toast.error("Failed to navigate to citation");
+    }
   };
 
   const handleReprocessStudy = async (studyId: string) => {
@@ -648,6 +675,8 @@ const Index = () => {
             pdfDocRef={pdfDocRef}
             extractedFigures={extractedFigures}
             studyId={currentStudy?.id}
+            onNavigateToChunk={handleNavigateToChunk}
+            activeCitationIndices={activeCitationIndices}
           />
           </div>
         </ResizablePanel>
@@ -732,8 +761,8 @@ const Index = () => {
             )}
               </div>
             </div>
-            <Tabs defaultValue="extractions" className="h-full flex flex-col">
-              <TabsList className="grid w-full grid-cols-3 mb-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+              <TabsList className="grid w-full grid-cols-4 mb-4">
                 <TabsTrigger value="extractions">
                   Extractions ({extractions.length})
                 </TabsTrigger>
@@ -742,6 +771,9 @@ const Index = () => {
                 </TabsTrigger>
                 <TabsTrigger value="tables">
                   Tables
+                </TabsTrigger>
+                <TabsTrigger value="citations">
+                  Citations
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="extractions" className="flex-1 overflow-auto">
@@ -772,6 +804,22 @@ const Index = () => {
                   <TableExtractionPanel
                     studyId={currentStudy.id}
                     onNavigateToTable={(pageNum) => setCurrentPage(pageNum)}
+                  />
+                )}
+              </TabsContent>
+              <TabsContent value="citations" className="flex-1 overflow-auto">
+                {currentStudy && (
+                  <SourceProvenancePanel
+                    studyId={currentStudy.id}
+                    extractions={extractions.map(ext => ({
+                      id: ext.id,
+                      field_name: ext.fieldName,
+                      text: ext.text,
+                      source_citations: ext.sourceCitations || null,
+                      validation_status: ext.validation_status,
+                      page: ext.page,
+                    }))}
+                    onNavigateToChunk={handleNavigateToChunk}
                   />
                 )}
               </TabsContent>
