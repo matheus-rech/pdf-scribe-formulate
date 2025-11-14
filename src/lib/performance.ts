@@ -188,19 +188,26 @@ export const performanceMonitor = new PerformanceMonitor();
 
 /**
  * Hook for React components to measure render performance
+ *
+ * Usage:
+ *   usePerformanceMonitor("MyComponent")
+ * Records the time taken for the component to render.
  */
-export function usePerformanceMonitor(componentName: string) {
-  const startTime = performance.now();
+import { useEffect, useRef } from "react";
 
-  return () => {
-    const duration = performance.now() - startTime;
+export function usePerformanceMonitor(componentName: string) {
+  const startTimeRef = useRef<number>(performance.now());
+
+  useEffect(() => {
+    const duration = performance.now() - startTimeRef.current;
     performanceMonitor.recordMetric({
       name: `render_${componentName}`,
       value: duration,
       unit: 'ms',
       timestamp: Date.now(),
     });
-  };
+    // No cleanup needed
+  }, [componentName]);
 }
 
 /**
