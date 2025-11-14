@@ -17,9 +17,10 @@ interface ExtractionDebugPanelProps {
   studyId: string;
   onReextract?: (studyId: string, onProgress: (message: string) => void) => Promise<{ figures: number; tables: number; success: boolean }>;
   onReextractChunks?: (studyId: string, onProgress: (message: string) => void) => Promise<{ chunks: number; success: boolean }>;
+  onReextractAll?: (studyId: string, onProgress: (message: string) => void) => Promise<{ figures: number; tables: number; chunks: number; success: boolean }>;
 }
 
-export function ExtractionDebugPanel({ studyId, onReextract, onReextractChunks }: ExtractionDebugPanelProps) {
+export function ExtractionDebugPanel({ studyId, onReextract, onReextractChunks, onReextractAll }: ExtractionDebugPanelProps) {
   const [stats, setStats] = useState<ExtractionStats>({
     figures: { found: 0, saved: 0, loading: true },
     tables: { found: 0, saved: 0, loading: true },
@@ -28,8 +29,10 @@ export function ExtractionDebugPanel({ studyId, onReextract, onReextractChunks }
   });
   const [isReextracting, setIsReextracting] = useState(false);
   const [isReextractingChunks, setIsReextractingChunks] = useState(false);
+  const [isReextractingAll, setIsReextractingAll] = useState(false);
   const [reextractProgress, setReextractProgress] = useState<string>('');
   const [reextractChunksProgress, setReextractChunksProgress] = useState<string>('');
+  const [reextractAllProgress, setReextractAllProgress] = useState<string>('');
 
   useEffect(() => {
     const loadStats = async () => {
@@ -276,11 +279,77 @@ export function ExtractionDebugPanel({ studyId, onReextract, onReextractChunks }
 
           {/* Re-extraction Buttons */}
           <div className="space-y-2">
+            {/* Fix All button - shown when multiple extraction types failed */}
+            {onReextractAll && (
+              (stats.figures.saved === 0 || stats.tables.saved === 0) && stats.chunks.saved === 0
+            ) && (
+              <div className="space-y-2">
+                <Button
+                  onClick={async () => {
+                    if (!onReextractAll) return;
+                    
+                    setIsReextractingAll(true);
+                    setReextractAllProgress('Starting comprehensive re-extraction...');
+
+                    try {
+                      const result = await onReextractAll(studyId, (message) => {
+                        setReextractAllProgress(message);
+                      });
+
+                      if (result.success) {
+                        // Reload all stats after successful re-extraction
+                        const [figuresData, tablesData, chunksData] = await Promise.all([
+                          supabase.from('pdf_figures' as any).select('id', { count: 'exact' }).eq('study_id', studyId),
+                          supabase.from('pdf_tables' as any).select('id', { count: 'exact' }).eq('study_id', studyId),
+                          supabase.from('pdf_text_chunks' as any).select('id', { count: 'exact' }).eq('study_id', studyId)
+                        ]);
+
+                        setStats(prev => ({
+                          ...prev,
+                          figures: { found: result.figures, saved: result.figures, loading: false },
+                          tables: { found: result.tables, saved: result.tables, loading: false },
+                          chunks: { found: result.chunks, saved: result.chunks, loading: false }
+                        }));
+
+                        setReextractAllProgress('');
+                      }
+                    } catch (error: any) {
+                      console.error('Comprehensive re-extraction error:', error);
+                      setReextractAllProgress('');
+                    } finally {
+                      setIsReextractingAll(false);
+                    }
+                  }}
+                  disabled={isReextractingAll || isReextracting || isReextractingChunks}
+                  variant="default"
+                  size="sm"
+                  className="w-full"
+                >
+                  {isReextractingAll ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {reextractAllProgress || 'Fixing all...'}
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Fix All - Re-extract Everything
+                    </>
+                  )}
+                </Button>
+                {isReextractingAll && reextractAllProgress && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    {reextractAllProgress}
+                  </p>
+                )}
+              </div>
+            )}
+
             {onReextract && (stats.figures.saved === 0 || stats.tables.saved === 0) && (
               <div className="space-y-2">
                 <Button
                   onClick={handleReextract}
-                  disabled={isReextracting || isReextractingChunks}
+                  disabled={isReextracting || isReextractingChunks || isReextractingAll}
                   variant="outline"
                   size="sm"
                   className="w-full"
@@ -309,7 +378,7 @@ export function ExtractionDebugPanel({ studyId, onReextract, onReextractChunks }
               <div className="space-y-2">
                 <Button
                   onClick={handleReextractChunks}
-                  disabled={isReextractingChunks || isReextracting}
+                  disabled={isReextractingChunks || isReextracting || isReextractingAll}
                   variant="outline"
                   size="sm"
                   className="w-full"
