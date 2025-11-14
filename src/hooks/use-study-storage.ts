@@ -217,15 +217,15 @@ export const useStudyStorage = (userId: string | null) => {
                 pageTexts.set(pageNum, pageText);
               }
 
-              // Enhance captions for each figure (rate-limited batches)
-              const enhancedCount = await enhanceFigureCaptions(
+              // Match captions for each figure using AI (rate-limited batches)
+              const matchedCount = await matchFigureCaptions(
                 data.id,
                 allFigures,
                 pageTexts
               );
 
-              if (enhancedCount > 0) {
-                console.log(`🤖 AI-enhanced ${enhancedCount}/${allFigures.length} figure captions`);
+              if (matchedCount > 0) {
+                console.log(`🤖 AI-matched ${matchedCount}/${allFigures.length} figure captions`);
               }
             } catch (aiError) {
               console.error('Error enhancing captions:', aiError);
@@ -608,59 +608,87 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
-  // Enhance figure captions with AI
-  const enhanceFigureCaptions = async (
+  // Match figure captions with AI based on proximity and references
+  const matchFigureCaptions = async (
     studyId: string,
     figures: any[],
     pageTexts: Map<number, string>
   ): Promise<number> => {
-    let enhancedCount = 0;
+    let matchedCount = 0;
 
-    for (const figure of figures) {
+    // Group figures by page for batch processing
+    const figuresByPage = new Map<number, any[]>();
+    figures.forEach(figure => {
+      const pageNum = figure.pageNum;
+      if (!figuresByPage.has(pageNum)) {
+        figuresByPage.set(pageNum, []);
+      }
+      figuresByPage.get(pageNum)!.push(figure);
+    });
+
+    // Process each page with figures
+    for (const [pageNum, pageFigures] of figuresByPage.entries()) {
       try {
-        const pageContext = pageTexts.get(figure.pageNum);
-        if (!pageContext || pageContext.length < 50) {
-          continue; // Skip if no meaningful text on page
+        const pageText = pageTexts.get(pageNum);
+        if (!pageText || pageText.length < 50) {
+          console.log(`Skipping page ${pageNum} - insufficient text`);
+          continue;
         }
 
-        const { data, error } = await supabase.functions.invoke('enhance-figure-caption', {
+        console.log(`Matching captions for ${pageFigures.length} figures on page ${pageNum}`);
+
+        const { data, error } = await supabase.functions.invoke('match-figure-captions', {
           body: {
-            figureId: figure.id,
-            pageNumber: figure.pageNum,
-            pageContext: pageContext
+            figures: pageFigures.map(fig => ({
+              id: fig.id,
+              page_number: pageNum,
+              x: fig.x || 0,
+              y: fig.y || 0,
+              width: fig.width,
+              height: fig.height,
+              figure_id: fig.id
+            })),
+            pageText: pageText,
+            pageNumber: pageNum
           }
         });
 
         if (error) {
-          console.error(`Caption enhancement error for ${figure.id}:`, error);
+          console.error(`Caption matching error for page ${pageNum}:`, error);
           continue;
         }
 
-        if (data?.caption) {
-          // Update figure with AI-enhanced caption
-          const { error: updateError } = await supabase
-            .from('pdf_figures' as any)
-            .update({
-              caption: data.caption,
-              ai_enhanced: true
-            })
-            .eq('study_id', studyId)
-            .eq('figure_id', figure.id);
+        const matches = data?.matches || [];
+        console.log(`Found ${matches.length} caption matches on page ${pageNum}`);
 
-          if (!updateError) {
-            enhancedCount++;
+        // Update figures with matched captions
+        for (const match of matches) {
+          if (match.confidence > 0.5 && match.caption) {
+            const { error: updateError } = await supabase
+              .from('pdf_figures' as any)
+              .update({
+                caption: match.caption,
+                ai_enhanced: true
+              })
+              .eq('study_id', studyId)
+              .eq('figure_id', match.figure_id);
+
+            if (!updateError) {
+              matchedCount++;
+              console.log(`  ✓ Matched: ${match.figure_id} -> "${match.caption.substring(0, 60)}..." (${match.confidence.toFixed(2)})`);
+            }
           }
         }
 
-        // Rate limiting: small delay between API calls
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Rate limiting: small delay between page API calls
+        await new Promise(resolve => setTimeout(resolve, 800));
       } catch (error) {
-        console.error(`Error enhancing caption for ${figure.id}:`, error);
+        console.error(`Error matching captions for page ${pageNum}:`, error);
         continue;
       }
     }
 
-    return enhancedCount;
+    return matchedCount;
   };
 
   // Load extracted figures for a study

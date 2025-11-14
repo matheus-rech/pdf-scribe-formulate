@@ -35,3 +35,6 @@ verify_jwt = true
 
 [functions.enhance-figure-caption]
 verify_jwt = true
+
+[functions.match-figure-captions]
+verify_jwt = false
