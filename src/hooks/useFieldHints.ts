@@ -65,7 +65,7 @@ export const useFieldHints = ({
         setHints([]);
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error && typeof error === 'object' && 'name' in error && error.name !== 'AbortError') {
         console.error('Error generating field hints:', error);
         setHints([]);
       }

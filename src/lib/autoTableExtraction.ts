@@ -109,8 +109,10 @@ async function enhanceTablesWithCaptions(
     const matches = [...fullText.matchAll(tableCaptionPattern)];
     
     matches.forEach(match => {
-      const tableNum = parseInt(match[1]);
-      const caption = match[2].trim();
+      const tableNum = parseInt(match[1] ?? '0');
+      const caption = match[2]?.trim();
+      
+      if (!caption) return;
       
       // Find matching table by number
       const matchingTable = tables.find(t => t.table_number === tableNum);

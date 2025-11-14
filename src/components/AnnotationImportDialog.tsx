@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, CheckCircle2, AlertCircle, Sparkles, Import, Upload } from "lucide-react";
+import { FileText, CheckCircle2, Sparkles, Import, Upload } from "lucide-react";
 import type { PDFAnnotation, AnnotationImportResult } from "@/lib/annotationParser";
 import { getAnnotationColor } from "@/lib/annotationParser";
 import { parseAnnotationJSON } from "@/lib/annotationExport";

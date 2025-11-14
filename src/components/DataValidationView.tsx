@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { AlertTriangle, CheckCircle2, XCircle, Sparkles, Loader2, Info } from "lucide-react";
-import { validateTableData, formatValidationIssue, detectColumnTypes, type ValidationResult } from "@/lib/dataValidation";
+import { validateTableData, detectColumnTypes, type ValidationResult } from "@/lib/dataValidation";
 import type { ParsedTable } from "@/lib/tableParser";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
