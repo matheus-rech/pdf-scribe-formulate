@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => ({
     react(), 
     mode === "development" && componentTagger(),
     process.env.ANALYZE && visualizer({
-      open: true,
+      open: mode === "development", // Only open automatically in development mode
       filename: "dist/stats.html",
       gzipSize: true,
       brotliSize: true,
