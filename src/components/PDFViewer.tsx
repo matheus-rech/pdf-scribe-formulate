@@ -51,6 +51,7 @@ interface PDFViewerProps {
   studySections?: any[];
   onBatchExtract?: (section: any) => void;
   isBatchExtracting?: boolean;
+  onAnnotationsChange?: (annotations: any[]) => void;
 }
 
 export const PDFViewer = ({
@@ -71,7 +72,8 @@ export const PDFViewer = ({
   onJumpToExtraction,
   studySections,
   onBatchExtract,
-  isBatchExtracting = false
+  isBatchExtracting = false,
+  onAnnotationsChange
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
@@ -219,6 +221,13 @@ export const PDFViewer = ({
     const thumbnail = fabricCanvas.toDataURL({ format: 'png', quality: 0.5, multiplier: 1 });
     savePageAnnotation(currentPage, json, thumbnail);
   }, [fabricCanvas, drawingMode, currentPage, savePageAnnotation]);
+
+  // Notify parent component when annotations change
+  useEffect(() => {
+    if (onAnnotationsChange) {
+      onAnnotationsChange(getAllAnnotations());
+    }
+  }, [pageAnnotations, onAnnotationsChange, getAllAnnotations]);
 
   // Load annotations for current page
   useEffect(() => {
