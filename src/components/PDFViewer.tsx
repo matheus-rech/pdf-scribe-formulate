@@ -1207,14 +1207,20 @@ export const PDFViewer = ({
 
             <Worker workerUrl={`https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`}>
               <div style={{ height: '750px' }}>
-                <Viewer
-                  fileUrl={fileUrl}
-                  plugins={[highlightPluginInstance, searchPluginInstance]}
-                  onDocumentLoad={handleDocumentLoad}
-                  onPageChange={handlePageChange}
-                  initialPage={currentPage - 1}
-                  defaultScale={scale}
-                />
+                {fileUrl ? (
+                  <Viewer
+                    fileUrl={fileUrl}
+                    plugins={[highlightPluginInstance, searchPluginInstance]}
+                    onDocumentLoad={handleDocumentLoad}
+                    onPageChange={handlePageChange}
+                    initialPage={currentPage - 1}
+                    defaultScale={scale}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    No PDF loaded. Please upload a PDF file to begin.
+                  </div>
+                )}
               </div>
             </Worker>
 
