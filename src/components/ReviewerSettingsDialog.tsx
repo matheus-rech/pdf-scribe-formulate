@@ -7,6 +7,8 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, AlertTriangle, Settings2, Sparkles, Zap, Clock } from "lucide-react";
@@ -20,6 +22,10 @@ interface ReviewerConfig {
   prompt_strategy: string;
   priority: number;
   enabled: boolean;
+  seed?: number | null;
+  max_tokens?: number;
+  reasoning_effort?: string | null;
+  custom_parameters?: any;
 }
 
 interface ReviewerSettingsDialogProps {
@@ -79,20 +85,28 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
     setHasChanges(true);
   };
 
+  const handleFieldChange = (id: string, field: keyof ReviewerConfig, value: any) => {
+    setReviewers(prev =>
+      prev.map(r => (r.id === id ? { ...r, [field]: value } : r))
+    );
+    setHasChanges(true);
+  };
+
   const saveChanges = async () => {
     setSaving(true);
     try {
-      const updates = reviewers.map(reviewer => ({
-        id: reviewer.id,
-        enabled: reviewer.enabled,
-        temperature: reviewer.temperature,
-      }));
-
-      for (const update of updates) {
+      for (const reviewer of reviewers) {
         const { error } = await supabase
           .from('reviewer_configs')
-          .update({ enabled: update.enabled, temperature: update.temperature })
-          .eq('id', update.id);
+          .update({
+            enabled: reviewer.enabled,
+            temperature: reviewer.temperature,
+            seed: reviewer.seed,
+            max_tokens: reviewer.max_tokens,
+            reasoning_effort: reviewer.reasoning_effort,
+            custom_parameters: reviewer.custom_parameters
+          })
+          .eq('id', reviewer.id);
 
         if (error) throw error;
       }
@@ -228,7 +242,8 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
               </CardHeader>
               
               {reviewer.enabled && (
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 space-y-4">
+                  {/* Temperature Slider */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm">
@@ -250,6 +265,60 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
                       disabled={!reviewer.enabled}
                     />
                   </div>
+
+                  {/* Seed Input */}
+                  <div className="space-y-2">
+                    <Label className="text-sm flex items-center gap-2">
+                      Seed (Optional)
+                      <span className="text-xs text-muted-foreground font-normal">
+                        For reproducible results
+                      </span>
+                    </Label>
+                    <Input
+                      type="number"
+                      value={reviewer.seed ?? ''}
+                      onChange={(e) => handleFieldChange(reviewer.id, 'seed', e.target.value ? parseInt(e.target.value) : null)}
+                      placeholder="Leave empty for random"
+                      className="h-8"
+                    />
+                  </div>
+
+                  {/* Max Tokens Slider */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">
+                        Max Tokens: {reviewer.max_tokens || 4000}
+                      </Label>
+                    </div>
+                    <Slider
+                      value={[reviewer.max_tokens || 4000]}
+                      onValueChange={(value) => handleFieldChange(reviewer.id, 'max_tokens', value[0])}
+                      min={500}
+                      max={32000}
+                      step={500}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Reasoning Effort (for o1/o3/o4 models) */}
+                  {(reviewer.model.includes('o1') || reviewer.model.includes('o3') || reviewer.model.includes('o4')) && (
+                    <div className="space-y-2">
+                      <Label className="text-sm">Reasoning Effort</Label>
+                      <Select
+                        value={reviewer.reasoning_effort || 'medium'}
+                        onValueChange={(value) => handleFieldChange(reviewer.id, 'reasoning_effort', value)}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low - Faster, less depth</SelectItem>
+                          <SelectItem value="medium">Medium - Balanced</SelectItem>
+                          <SelectItem value="high">High - Deep reasoning</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </CardContent>
               )}
             </Card>

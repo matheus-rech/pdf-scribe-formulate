@@ -22,6 +22,8 @@ import { ExtractionMethodInfo } from "./ExtractionMethodInfo";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Settings2, Info } from "lucide-react";
 import { ExportDialog } from "./ExportDialog";
+import { ReviewerCountSelector } from "./ReviewerCountSelector";
+import { ExtractionSettingsDialog } from "./ExtractionSettingsDialog";
 
 interface ExtractionFormProps {
   activeField: string | null;
@@ -104,6 +106,7 @@ export const ExtractionForm = ({
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [isExtractingPICOT, setIsExtractingPICOT] = useState(false);
+  const [numReviewers, setNumReviewers] = useState(3); // NEW: Dynamic reviewer count
   
   // AI Extraction state
   const [isExtractingStep, setIsExtractingStep] = useState<Record<number, boolean>>({});
@@ -506,7 +509,8 @@ export const ExtractionForm = ({
           stepNumber, 
           pdfText, 
           studyId,
-          extractionId
+          extractionId,
+          numReviewers
         }
       });
 
