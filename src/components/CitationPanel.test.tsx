@@ -7,23 +7,17 @@ describe('CitationPanel', () => {
     0: { 
       index: 0,
       sentence: 'First citation text from the document.', 
-      pageNum: 1, 
-      bbox: { x: 10, y: 100, width: 200, height: 12 }, 
-      confidence: 0.95 
+      pageNum: 1
     },
     1: { 
       index: 1,
       sentence: 'Second citation text with more details.', 
-      pageNum: 2, 
-      bbox: { x: 10, y: 150, width: 220, height: 12 }, 
-      confidence: 0.88 
+      pageNum: 2
     },
     2: { 
       index: 2,
       sentence: 'Third citation from same page.', 
-      pageNum: 2, 
-      bbox: { x: 10, y: 200, width: 180, height: 12 }, 
-      confidence: 0.92 
+      pageNum: 2
     }
   }
 
@@ -132,7 +126,7 @@ describe('CitationPanel', () => {
   it('should handle missing citation data gracefully', () => {
     const onClick = vi.fn()
     const incompleteCitationMap: Record<number, any> = {
-      0: { index: 0, sentence: 'Only text', pageNum: 1, bbox: {}, confidence: 0.9 }
+      0: { index: 0, sentence: 'Only text', pageNum: 1 }
     }
     
     render(
