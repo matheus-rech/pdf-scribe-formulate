@@ -1,55 +1,43 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, IDBPDatabase } from 'idb';
 
-interface PDFExtractionDB extends DBSchema {
-  extractions: {
-    key: string;
-    value: {
-      id: string;
-      studyId: string;
-      data: any;
-      annotations: any[];
-      timestamp: number;
-      synced: boolean;
-      userId?: string;
-    };
-    indexes: { 'by-sync': boolean; 'by-timestamp': number };
-  };
-  annotations: {
-    key: string;
-    value: {
-      id: string;
-      pageNumber: number;
-      type: string;
-      content: string;
-      timestamp: number;
-      synced: boolean;
-      studyId?: string;
-    };
-    indexes: { 'by-sync': boolean; 'by-study': string };
-  };
-  syncQueue: {
-    key: number;
-    value: {
-      id: number;
-      type: 'extraction' | 'annotation';
-      action: 'create' | 'update' | 'delete';
-      data: any;
-      timestamp: number;
-      retries: number;
-    };
-    indexes: { 'by-timestamp': number };
-  };
+interface ExtractionData {
+  id: string;
+  studyId: string;
+  data: any;
+  annotations: any[];
+  timestamp: number;
+  synced: boolean;
+  userId?: string;
+}
+
+interface AnnotationData {
+  id: string;
+  pageNumber: number;
+  type: string;
+  content: string;
+  timestamp: number;
+  synced: boolean;
+  studyId?: string;
+}
+
+interface SyncQueueData {
+  id?: number;
+  type: 'extraction' | 'annotation';
+  action: 'create' | 'update' | 'delete';
+  data: any;
+  timestamp: number;
+  retries: number;
 }
 
 class OfflineStorage {
-  private db: IDBPDatabase<PDFExtractionDB> | null = null;
+  private db: IDBPDatabase | null = null;
   private readonly DB_NAME = 'pdf-extraction-db';
   private readonly DB_VERSION = 1;
 
   async init(): Promise<void> {
     if (this.db) return;
 
-    this.db = await openDB<PDFExtractionDB>(this.DB_NAME, this.DB_VERSION, {
+    this.db = await openDB(this.DB_NAME, this.DB_VERSION, {
       upgrade(db) {
         // Extractions store
         if (!db.objectStoreNames.contains('extractions')) {
@@ -111,7 +99,7 @@ class OfflineStorage {
   async getUnsyncedExtractions(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
-    return this.db.getAllFromIndex('extractions', 'by-sync', false);
+    return this.db.getAllFromIndex('extractions', 'by-sync', IDBKeyRange.only(false));
   }
 
   async markExtractionSynced(id: string): Promise<void> {
@@ -155,7 +143,7 @@ class OfflineStorage {
   async getUnsyncedAnnotations(): Promise<any[]> {
     await this.init();
     if (!this.db) throw new Error('Database not initialized');
-    return this.db.getAllFromIndex('annotations', 'by-sync', false);
+    return this.db.getAllFromIndex('annotations', 'by-sync', IDBKeyRange.only(false));
   }
 
   async markAnnotationSynced(id: string): Promise<void> {
