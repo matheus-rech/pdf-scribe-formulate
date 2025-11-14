@@ -9,16 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, Plus, Edit, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-interface PromptTemplate {
-  id: string;
-  model_provider: string;
-  template_name: string;
-  system_prompt: string;
-  extraction_prompt: string;
-  field_specific_instructions: Record<string, string>;
-  is_default: boolean;
-}
+import type { PromptTemplate } from "@/types/ab-testing";
 
 export const PromptTemplateManager = () => {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
@@ -51,17 +42,17 @@ export const PromptTemplateManager = () => {
       if (!user) return;
 
       const { data, error } = await supabase
-        .from("prompt_templates")
+        .from("prompt_templates" as any)
         .select("*")
         .eq("user_id", user.id)
         .order("model_provider", { ascending: true })
         .order("template_name", { ascending: true });
 
       if (error) throw error;
-      setTemplates((data || []).map(item => ({
+      setTemplates(((data as any[]) || []).map(item => ({
         ...item,
         field_specific_instructions: (item.field_specific_instructions as Record<string, string>) || {}
-      })));
+      })) as PromptTemplate[]);
     } catch (error) {
       console.error("Error loading templates:", error);
       toast.error("Failed to load templates");
@@ -92,15 +83,15 @@ export const PromptTemplateManager = () => {
 
       if (editingTemplate) {
         const { error } = await supabase
-          .from("prompt_templates")
+          .from("prompt_templates" as any)
           .update(templateData)
           .eq("id", editingTemplate.id);
         if (error) throw error;
         toast.success("Template updated successfully");
       } else {
         const { error } = await supabase
-          .from("prompt_templates")
-          .insert(templateData);
+          .from("prompt_templates" as any)
+          .insert([templateData]);
         if (error) throw error;
         toast.success("Template created successfully");
       }
@@ -122,7 +113,7 @@ export const PromptTemplateManager = () => {
 
     try {
       const { error } = await supabase
-        .from("prompt_templates")
+        .from("prompt_templates" as any)
         .delete()
         .eq("id", id);
 

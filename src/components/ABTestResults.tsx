@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Loader2, Trophy, TrendingUp, TrendingDown } from "lucide-react";
+import type { ABTest, ABTestVariant, ABTestStats } from "@/types/ab-testing";
 
 interface ABTestResultsProps {
   testId: string;
@@ -16,9 +17,9 @@ interface ABTestResultsProps {
 
 export const ABTestResults = ({ testId, open, onOpenChange }: ABTestResultsProps) => {
   const [loading, setLoading] = useState(true);
-  const [test, setTest] = useState<any>(null);
-  const [variants, setVariants] = useState<any[]>([]);
-  const [stats, setStats] = useState<any[]>([]);
+  const [test, setTest] = useState<ABTest | null>(null);
+  const [variants, setVariants] = useState<ABTestVariant[]>([]);
+  const [stats, setStats] = useState<ABTestStats[]>([]);
   const [significance, setSignificance] = useState<any[]>([]);
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export const ABTestResults = ({ testId, open, onOpenChange }: ABTestResultsProps
         .eq("id", testId)
         .single();
 
-      setTest(testData);
+      setTest((testData as any) as ABTest | null);
 
       // Load variants
       const { data: variantsData } = await supabase
@@ -46,7 +47,7 @@ export const ABTestResults = ({ testId, open, onOpenChange }: ABTestResultsProps
         .select("*")
         .eq("test_id", testId);
 
-      setVariants(variantsData || []);
+      setVariants(((variantsData as any[]) || []) as ABTestVariant[]);
 
       // Load stats
       const { data: statsData } = await supabase
@@ -54,13 +55,17 @@ export const ABTestResults = ({ testId, open, onOpenChange }: ABTestResultsProps
         .select("*")
         .eq("test_id", testId);
 
-      setStats(statsData || []);
+      setStats(((statsData as any[]) || []) as ABTestStats[]);
 
       // Calculate significance
-      const { data: sigData } = await supabase
-        .rpc("calculate_ab_test_significance", { p_test_id: testId });
+      try {
+        const { data: sigData } = await (supabase as any)
+          .rpc("calculate_ab_test_significance", { p_test_id: testId });
 
-      setSignificance(sigData || []);
+        setSignificance(sigData || []);
+      } catch (sigError) {
+        console.error("Error calculating significance:", sigError);
+      }
     } catch (error) {
       console.error("Error loading results:", error);
       toast.error("Failed to load test results");
@@ -102,11 +107,24 @@ export const ABTestResults = ({ testId, open, onOpenChange }: ABTestResultsProps
     );
   }
 
-  const getVariantStats = (variantId: string) => {
-    return stats.find(s => s.variant_id === variantId) || {};
+  const getVariantStats = (variantId: string): ABTestStats => {
+    return stats.find(s => s.variant_id === variantId) || {
+      id: '',
+      test_id: testId,
+      variant_id: variantId,
+      sample_size: 0,
+      accuracy_rate: 0,
+      avg_confidence: 0,
+      avg_processing_time_ms: 0,
+      avg_cost: 0,
+      agreement_rate: 0,
+      statistical_significance: 0,
+      is_significant: false,
+      updated_at: new Date().toISOString()
+    };
   };
 
-  const getVariantSignificance = (variantId: string) => {
+  const getVariantSignificance = (variantId: string): any => {
     return significance.find(s => s.variant_id === variantId) || {};
   };
 
