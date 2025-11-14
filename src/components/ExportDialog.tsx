@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Download, FileJson, FileSpreadsheet, Filter, X } from "lucide-react";
+import { Download, FileJson, FileSpreadsheet, Filter, X, Package } from "lucide-react";
 import { format as formatDate } from "date-fns";
 import {
   Dialog,
@@ -27,18 +27,24 @@ import {
   formatExportFilename,
   type ExtractionExportData,
 } from "@/lib/exportData";
+import { Checkbox } from "@/components/ui/checkbox";
+import { createZipExport, downloadBlob } from "@/lib/zipExport";
+import type { PageAnnotation } from "@/hooks/usePageAnnotations";
 
 interface ExportDialogProps {
   studyId: string;
   studyName: string;
+  children?: React.ReactNode;
+  annotations?: PageAnnotation[];
 }
 
 type ExportFormat = "json" | "csv" | "excel";
 
-export const ExportDialog = ({ studyId, studyName }: ExportDialogProps) => {
+export const ExportDialog = ({ studyId, studyName, children, annotations }: ExportDialogProps) => {
   const [format, setFormat] = useState<ExportFormat>("csv");
   const [isExporting, setIsExporting] = useState(false);
   const [open, setOpen] = useState(false);
+  const [includeAnnotations, setIncludeAnnotations] = useState(false);
   const { toast } = useToast();
 
   // Filter states
@@ -132,23 +138,43 @@ export const ExportDialog = ({ studyId, studyName }: ExportDialogProps) => {
 
       const filename = formatExportFilename(studyName);
 
-      // Export based on selected format
-      switch (format) {
-        case "json":
-          exportToJSON(exportData, filename);
-          break;
-        case "csv":
-          exportToCSV(exportData, filename);
-          break;
-        case "excel":
-          exportToExcel(exportData, filename);
-          break;
-      }
+      // Check if we need to create a ZIP file (when annotations are included)
+      if (includeAnnotations && annotations && annotations.length > 0) {
+        // Create ZIP bundle with data and annotations
+        const zipBlob = await createZipExport({
+          studyName,
+          extractionData: exportData,
+          annotations,
+          format,
+          includeAnnotations: true,
+        });
 
-      toast({
-        title: "Export successful",
-        description: `Exported ${filteredExtractions.length} extractions as ${format.toUpperCase()}`,
-      });
+        const timestamp = new Date().toISOString().split('T')[0];
+        downloadBlob(zipBlob, `${filename}_bundle_${timestamp}.zip`);
+
+        toast({
+          title: "Export successful",
+          description: `Exported ${filteredExtractions.length} extractions and ${annotations.length} annotated pages as ZIP`,
+        });
+      } else {
+        // Export based on selected format (without annotations)
+        switch (format) {
+          case "json":
+            exportToJSON(exportData, filename);
+            break;
+          case "csv":
+            exportToCSV(exportData, filename);
+            break;
+          case "excel":
+            exportToExcel(exportData, filename);
+            break;
+        }
+
+        toast({
+          title: "Export successful",
+          description: `Exported ${filteredExtractions.length} extractions as ${format.toUpperCase()}`,
+        });
+      }
 
       setOpen(false);
     } catch (error) {
@@ -166,15 +192,17 @@ export const ExportDialog = ({ studyId, studyName }: ExportDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="relative">
-          <Download className="h-4 w-4 mr-2" />
-          Export Data
-          {activeFilterCount > 0 && (
-            <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center">
-              {activeFilterCount}
-            </Badge>
-          )}
-        </Button>
+        {children || (
+          <Button variant="outline" size="sm" className="relative">
+            <Download className="h-4 w-4 mr-2" />
+            Export Data
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -345,6 +373,31 @@ export const ExportDialog = ({ studyId, studyName }: ExportDialogProps) => {
               </div>
             </RadioGroup>
           </div>
+
+          {/* Include Annotations Option */}
+          {annotations && annotations.length > 0 && (
+            <div className="flex items-start space-x-3 p-4 rounded-lg border bg-muted/50">
+              <Checkbox
+                id="include-annotations"
+                checked={includeAnnotations}
+                onCheckedChange={(checked) => setIncludeAnnotations(checked as boolean)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="include-annotations" className="cursor-pointer font-medium">
+                  Include PDF Annotations in ZIP
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Bundle PDF annotations with extraction data ({annotations.length} page{annotations.length === 1 ? '' : 's'} annotated)
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <Package className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
+                    Export will be packaged as a ZIP file
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-2">

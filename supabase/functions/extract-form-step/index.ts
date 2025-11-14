@@ -1,43 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-// Input validation schema
-const ExtractFormStepSchema = z.object({
-  stepNumber: z.number().int().min(1).max(8),
-  pdfText: z.string().min(1).max(1000000),
-  studyId: z.string().uuid()
-});
+import { 
+  extractionRequestSchema,
+  corsHeaders,
+  handleCors,
+  createValidationErrorResponse
+} from '../_shared/validation-schemas.ts';
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   try {
     const body = await req.json();
     
-    // Validate input
-    const validation = ExtractFormStepSchema.safeParse(body);
-    if (!validation.success) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Invalid input', 
-          details: validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
+    // Validate input using shared schema
+    const result = extractionRequestSchema.safeParse(body);
+    if (!result.success) {
+      return createValidationErrorResponse(result.error, corsHeaders);
     }
 
-    const { stepNumber, pdfText, studyId } = validation.data;
+    const { stepNumber, pdfText, studyId } = result.data;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -63,9 +46,11 @@ serve(async (req) => {
       }
     };
 
-    // Load section-aware text if studyId provided
+    // Load section-aware text with citation support if studyId provided
     let targetText = pdfText;
     let sourceSection = "full_document";
+    let citableDocument = pdfText;
+    let relevantChunkIndices: number[] = [];
     
     if (studyId) {
       // Use authenticated client to respect RLS policies
@@ -83,37 +68,66 @@ serve(async (req) => {
         { global: { headers: { Authorization: authHeader } } }
       );
       
-      const { data: study, error: studyError } = await supabase
-        .from("studies")
-        .select("pdf_chunks")
-        .eq("id", studyId)
-        .single();
+      // Fetch text chunks for citation-based extraction
+      const { data: textChunks, error: chunksError } = await supabase
+        .from("pdf_text_chunks")
+        .select("chunk_index, text, section_name, page_number")
+        .eq("study_id", studyId)
+        .order("chunk_index");
       
-      if (studyError) {
-        console.error("Study access denied:", studyError);
-        return new Response(
-          JSON.stringify({ error: 'Study not found or access denied' }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      if (study?.pdf_chunks?.sections) {
+      if (!chunksError && textChunks && textChunks.length > 0) {
+        // Filter chunks by relevant sections
         const relevantSections = getSectionMapping(stepNumber);
-        const sections = study.pdf_chunks.sections.filter(
-          (s: any) => relevantSections.includes(s.type)
+        const filteredChunks = textChunks.filter(
+          (chunk: any) => !chunk.section_name || relevantSections.includes(chunk.section_name)
         );
         
-        if (sections.length > 0) {
-          const fullText = study.pdf_chunks.pageChunks
-            .map((c: any) => c.text)
-            .join("\n\n");
+        if (filteredChunks.length > 0) {
+          // Create citable document format: "[0] Text. [1] More text."
+          citableDocument = filteredChunks
+            .map((chunk: any) => `[${chunk.chunk_index}] ${chunk.text}`)
+            .join('\n');
           
-          targetText = sections
-            .map((s: any) => fullText.substring(s.charStart, s.charEnd))
-            .join("\n\n---\n\n");
-          
+          relevantChunkIndices = filteredChunks.map((c: any) => c.chunk_index);
+          targetText = citableDocument;
           sourceSection = relevantSections.join(", ");
-          console.log(`Step ${stepNumber} - Using sections: ${sourceSection}, text length: ${targetText.length}`);
+          
+          console.log(`Step ${stepNumber} - Using ${filteredChunks.length} citation-indexed chunks from sections: ${sourceSection}`);
+        }
+      } else {
+        // Fallback to old method if no chunks available
+        const { data: study, error: studyError } = await supabase
+          .from("studies")
+          .select("pdf_chunks")
+          .eq("id", studyId)
+          .single();
+        
+        if (studyError) {
+          console.error("Study access denied:", studyError);
+          return new Response(
+            JSON.stringify({ error: 'Study not found or access denied' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (study?.pdf_chunks?.sections) {
+          const relevantSections = getSectionMapping(stepNumber);
+          const sections = study.pdf_chunks.sections.filter(
+            (s: any) => relevantSections.includes(s.type)
+          );
+          
+          if (sections.length > 0) {
+            const fullText = study.pdf_chunks.pageChunks
+              .map((c: any) => c.text)
+              .join("\n\n");
+            
+            targetText = sections
+              .map((s: any) => fullText.substring(s.charStart, s.charEnd))
+              .join("\n\n---\n\n");
+            
+            sourceSection = relevantSections.join(", ");
+            console.log(`Step ${stepNumber} - Using sections: ${sourceSection}, text length: ${targetText.length}`);
+          }
         }
       }
     }
@@ -268,6 +282,7 @@ serve(async (req) => {
     const systemPrompt = `You are a clinical research data extraction specialist. Extract ONLY the specific data fields requested for this section of a clinical study extraction form.
 
 CRITICAL INSTRUCTIONS:
+- Each sentence in the document is indexed with [number] for citation tracking
 - Extract only factual data explicitly stated in the text
 - Use "Not specified" or leave empty if information is not found
 - For numeric values, extract the number only (no units unless requested)
@@ -275,9 +290,13 @@ CRITICAL INSTRUCTIONS:
 - Be precise and conservative - do not extrapolate or infer
 - If multiple values exist, use the most relevant or first mentioned
 
+CITATION REQUIREMENT:
+- After extracting each field, note the chunk indices [X, Y, Z] that support your extraction
+- Include an exact quote from the source text for verification
+
 Extract data for: ${schema.name.replace('extract_', '').replace('_', ' ')}`;
 
-    console.log(`Step ${stepNumber} - Calling AI for extraction`);
+    console.log(`Step ${stepNumber} - Calling AI for extraction with ${relevantChunkIndices.length} citation chunks`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -291,7 +310,7 @@ Extract data for: ${schema.name.replace('extract_', '').replace('_', ' ')}`;
           { role: "system", content: systemPrompt },
           { 
             role: "user", 
-            content: `Extract the requested data from this clinical study text:\n\n${targetText.substring(0, 50000)}` 
+            content: `DOCUMENT WITH CITATION INDICES:\n\n${targetText.substring(0, 50000)}\n\nExtract the requested data and provide citation indices for each field.` 
           }
         ],
         tools: [

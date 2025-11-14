@@ -47,6 +47,14 @@ export const usePageAnnotations = () => {
     return Array.from(pageAnnotations.values());
   }, [pageAnnotations]);
 
+  const restoreAnnotations = useCallback((annotations: PageAnnotation[]) => {
+    const newMap = new Map<number, PageAnnotation>();
+    annotations.forEach(annotation => {
+      newMap.set(annotation.pageNumber, annotation);
+    });
+    setPageAnnotations(newMap);
+  }, []);
+
   return {
     pageAnnotations,
     savePageAnnotation,
@@ -54,6 +62,7 @@ export const usePageAnnotations = () => {
     clearPageAnnotation,
     clearAllAnnotations,
     hasAnnotation,
-    getAllAnnotations
+    getAllAnnotations,
+    restoreAnnotations
   };
 };

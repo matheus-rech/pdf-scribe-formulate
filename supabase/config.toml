@@ -20,3 +20,24 @@ verify_jwt = true
 
 [functions.multi-model-extract]
 verify_jwt = true
+
+[functions.verify-sections]
+verify_jwt = true
+
+[functions.generate-summary]
+verify_jwt = false
+
+[functions.generate-field-hints]
+verify_jwt = false
+
+[functions.search-study-metadata]
+verify_jwt = true
+
+[functions.enhance-figure-caption]
+verify_jwt = true
+
+[functions.match-figure-captions]
+verify_jwt = false
+
+[functions.match-table-captions]
+verify_jwt = false

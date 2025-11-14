@@ -3,8 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { ExtractionForm } from "@/components/ExtractionForm";
 import { PDFViewer } from "@/components/PDFViewer";
 import { TraceLog } from "@/components/TraceLog";
+import { FigureExtractionPanel } from "@/components/FigureExtractionPanel";
+import { TableExtractionPanel } from "@/components/TableExtractionPanel";
 import { StudyManager } from "@/components/StudyManager";
 import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
+import { ExtractionDebugPanel } from "@/components/ExtractionDebugPanel";
+import { SectionDetectionProgress } from "@/components/SectionDetectionProgress";
+import { PDFProcessingDialog, type ProcessingStatus } from "@/components/PDFProcessingDialog";
+import { BulkReprocessDialog, type BulkReprocessProgress } from "@/components/BulkReprocessDialog";
 import { matchAnnotationsToFields, type PDFAnnotation } from "@/lib/annotationParser";
 import { toast } from "sonner";
 import { FileText, User, LogOut, ChevronLeft, ChevronRight, PanelLeftClose, PanelRightClose } from "lucide-react";
@@ -14,11 +20,18 @@ import { detectSourceCitations, type SourceCitation } from "@/lib/citationDetect
 import { AuditReportDialog } from "@/components/AuditReportDialog";
 import { BatchRevalidationDialog } from "@/components/BatchRevalidationDialog";
 import { ExportDialog } from "@/components/ExportDialog";
+import { BulkStudyExportDialog } from "@/components/BulkStudyExportDialog";
+import { SourceProvenancePanel } from "@/components/SourceProvenancePanel";
 import { supabase } from "@/integrations/supabase/client";
+import { autoExtractAndSaveTables } from "@/lib/autoTableExtraction";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import type { ImperativePanelHandle } from "react-resizable-panels";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { SearchResult } from "@/lib/pdfSearch";
+import * as pdfjsLib from 'pdfjs-dist';
 
 export interface ExtractionEntry {
   id: string;
@@ -48,9 +61,30 @@ const Index = () => {
   const [scale, setScale] = useState(1);
   const [pdfText, setPdfText] = useState<string>("");
   const [studies, setStudies] = useState<any[]>([]);
-  const [isCreatingStudy, setIsCreatingStudy] = useState(false);
+  const isCreatingStudyRef = useRef(false);
+  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>({
+    stage: 'uploading',
+    progress: 0,
+    message: 'Starting...'
+  });
+  const [bulkReprocessProgress, setBulkReprocessProgress] = useState<BulkReprocessProgress>({
+    total: 0,
+    completed: 0,
+    failed: 0,
+    results: []
+  });
+  const [showBulkReprocess, setShowBulkReprocess] = useState(false);
+  const [isBulkReprocessComplete, setIsBulkReprocessComplete] = useState(false);
   const [highlightedSources, setHighlightedSources] = useState<SourceCitation[]>([]);
+  const [pdfAnnotations, setPdfAnnotations] = useState<any[]>([]);
+  const [loadedAnnotations, setLoadedAnnotations] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const annotationSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
+  
+  // PDF search state
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [activeSearchIndex, setActiveSearchIndex] = useState<number>(0);
   
   // Panel collapse states
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(() => {
@@ -81,6 +115,12 @@ const Index = () => {
     },
   }, true);
 
+  const [detectedSections, setDetectedSections] = useState<any[]>([]);
+  const [showSectionProgress, setShowSectionProgress] = useState(false);
+  const [extractedFigures, setExtractedFigures] = useState<any[]>([]);
+  const [activeCitationIndices, setActiveCitationIndices] = useState<number[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("trace");
+
   const {
     currentStudy,
     setCurrentStudy,
@@ -90,6 +130,13 @@ const Index = () => {
     getAllStudies,
     loadStudyPdf,
     reprocessStudy,
+    reextractVisuals,
+    reextractTextChunks,
+    reextractAll,
+    bulkReprocessStudies,
+    savePageAnnotations,
+    loadPageAnnotations,
+    loadStudyFigures,
   } = useStudyStorage(userId);
 
   const [isReprocessing, setIsReprocessing] = useState(false);
@@ -124,28 +171,73 @@ const Index = () => {
     if (userId) {
       getAllStudies().then(setStudies);
     }
-  }, [userId]);
+  }, [userId, getAllStudies]);
 
   // Load extractions when study is selected
   useEffect(() => {
     if (currentStudy) {
       loadExtractions(currentStudy.id).then(setExtractions);
+      loadStudyFigures(currentStudy.id).then(setExtractedFigures);
     }
-  }, [currentStudy]);
+  }, [currentStudy, loadExtractions, loadStudyFigures]);
 
   // Create study and upload PDF when totalPages is available
   useEffect(() => {
-    if (pdfFile && totalPages > 0 && isCreatingStudy && !currentStudy) {
+    console.log('📋 Study creation useEffect triggered:', { 
+      hasPdfFile: !!pdfFile, 
+      totalPages, 
+      isCreatingStudy: isCreatingStudyRef.current, 
+      hasCurrentStudy: !!currentStudy 
+    });
+    
+    if (pdfFile && totalPages > 0 && isCreatingStudyRef.current && !currentStudy) {
       const studyName = pdfFile.name.replace('.pdf', '') || `Study - ${new Date().toLocaleDateString()}`;
       
-      createStudy(studyName, pdfFile, totalPages).then((newStudy) => {
+      setShowSectionProgress(true);
+      
+      createStudy(
+        studyName, 
+        pdfFile, 
+        totalPages,
+        (progress) => {
+          setProcessingStatus(progress);
+        },
+        (sections) => {
+          setDetectedSections(sections);
+        }
+      ).then(async (newStudy) => {
         if (newStudy) {
           getAllStudies().then(setStudies);
-          setIsCreatingStudy(false);
+          
+          // Automatically extract tables from PDF
+          try {
+            console.log('🔍 Starting automatic table extraction...', { studyId: newStudy.id, fileName: pdfFile.name });
+            setProcessingStatus({
+              stage: 'processing',
+              progress: 90,
+              message: 'Extracting tables from PDF...'
+            });
+            const tableCount = await autoExtractAndSaveTables(pdfFile, newStudy.id);
+            console.log('✅ Table extraction complete:', { tableCount });
+            if (tableCount > 0) {
+              toast.success(`Automatically extracted ${tableCount} table(s) from PDF`);
+            } else {
+              console.log('ℹ️ No tables found in PDF');
+            }
+          } catch (error) {
+            console.error('❌ Error auto-extracting tables:', error);
+            // Non-critical error, don't block the workflow
+          }
+          
+          isCreatingStudyRef.current = false;
+          // Keep section progress visible for a moment
+          setTimeout(() => setShowSectionProgress(false), 3000);
+        } else {
+          setShowSectionProgress(false);
         }
       });
     }
-  }, [pdfFile, totalPages, isCreatingStudy, currentStudy]);
+  }, [pdfFile, totalPages, isCreatingStudy, currentStudy, createStudy, getAllStudies]);
 
   const handleExtraction = (entry: ExtractionEntry) => {
     setExtractions(prev => [...prev, entry]);
@@ -172,9 +264,23 @@ const Index = () => {
         setPdfFile(pdf);
       }
       
+      // Load annotations for this study
+      const annotations = await loadPageAnnotations(studyId);
+      if (annotations && annotations.length > 0) {
+        setLoadedAnnotations(annotations);
+        toast.success(`Loaded study: ${study.name} (${annotations.length} pages annotated)`);
+      } else {
+        setLoadedAnnotations([]);
+        toast.success(`Loaded study: ${study.name}`);
+      }
+      
       // Load extractions
       const loadedExtractions = await loadExtractions(studyId);
       setExtractions(loadedExtractions);
+      
+      // Load extracted figures
+      const figures = await loadStudyFigures(studyId);
+      setExtractedFigures(figures);
       
       toast.success(`Loaded study: ${study.name}`);
     }
@@ -187,7 +293,11 @@ const Index = () => {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    console.log('📎 handleFileUpload called:', { fileName: file?.name, fileType: file?.type });
+    
     if (file && file.type === 'application/pdf') {
+      console.log('✅ Valid PDF file, starting upload process');
+      
       // Clear current state
       setCurrentStudy(null);
       setExtractions([]);
@@ -197,7 +307,8 @@ const Index = () => {
       
       // Set new PDF - study creation will happen after PDF loads and totalPages is set
       setPdfFile(file);
-      setIsCreatingStudy(true);
+      isCreatingStudyRef.current = true;
+      console.log('🛠️ Set isCreatingStudy ref to TRUE');
       toast.info("Loading PDF...");
     } else {
       toast.error("Please select a valid PDF file");
@@ -252,8 +363,46 @@ const Index = () => {
     setHighlightedSources([]);
   };
 
+  const handleSearchResults = (results: SearchResult[]) => {
+    setSearchResults(results);
+    setActiveSearchIndex(0);
+    if (results.length > 0) {
+      // Navigate to first result
+      setCurrentPage(results[0].page);
+    }
+  };
+
+  const handleHighlightSearchResult = (result: SearchResult, index: number) => {
+    setActiveSearchIndex(index);
+    setCurrentPage(result.page);
+  };
+
   const handleJumpToCitation = (citation: SourceCitation) => {
     setCurrentPage(citation.page);
+  };
+
+  // Handle navigation to chunk citation
+  const handleNavigateToChunk = async (pageNum: number, chunkIndex: number) => {
+    try {
+      // Navigate to page
+      setCurrentPage(pageNum);
+      
+      // Set active citation for highlighting
+      setActiveCitationIndices([chunkIndex]);
+      
+      // Switch to trace/citations tab if not already visible
+      setActiveTab("citations");
+      
+      toast.success(`Jumped to citation [${chunkIndex}] on page ${pageNum}`);
+      
+      // Clear after 3 seconds
+      setTimeout(() => {
+        setActiveCitationIndices([]);
+      }, 3000);
+    } catch (error) {
+      console.error("Error navigating to chunk:", error);
+      toast.error("Failed to navigate to citation");
+    }
   };
 
   const handleReprocessStudy = async (studyId: string) => {
@@ -362,9 +511,52 @@ const Index = () => {
       });
     });
 
-    if (importCount > 0) {
+  if (importCount > 0) {
       toast.success(`Successfully imported ${importCount} annotation(s) to form fields`);
     }
+  };
+
+  // Auto-save annotations with debouncing
+  const handleAnnotationsChange = (annotations: any[]) => {
+    if (!currentStudy) return;
+
+    // Clear existing timeout
+    if (annotationSaveTimeoutRef.current) {
+      clearTimeout(annotationSaveTimeoutRef.current);
+    }
+
+    // Set new timeout to save after 2 seconds of inactivity
+    annotationSaveTimeoutRef.current = setTimeout(async () => {
+      await savePageAnnotations(currentStudy.id, annotations);
+      console.log("Auto-saved annotations");
+    }, 2000);
+  };
+
+  // Handle bulk reprocess
+  const handleBulkReprocess = async () => {
+    setShowBulkReprocess(true);
+    setIsBulkReprocessComplete(false);
+
+    await bulkReprocessStudies((progress) => {
+      setBulkReprocessProgress(progress);
+    });
+
+    setIsBulkReprocessComplete(true);
+    
+    // Refresh studies list
+    const updatedStudies = await getAllStudies();
+    setStudies(updatedStudies);
+  };
+
+  const handleCloseBulkReprocess = () => {
+    setShowBulkReprocess(false);
+    setBulkReprocessProgress({
+      total: 0,
+      completed: 0,
+      failed: 0,
+      results: []
+    });
+    setIsBulkReprocessComplete(false);
   };
 
   if (!user) {
@@ -372,8 +564,9 @@ const Index = () => {
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <ResizablePanelGroup direction="horizontal">
+    <TooltipProvider>
+      <div className="flex h-screen bg-background overflow-hidden">
+        <ResizablePanelGroup direction="horizontal">
         {/* Left Panel - Form */}
         <ResizablePanel
           ref={leftPanelRef}
@@ -438,10 +631,29 @@ const Index = () => {
               onStudySelect={handleStudySelect}
               onNewStudy={handleNewStudy}
               onReprocessStudy={handleReprocessStudy}
+              onBulkReprocess={handleBulkReprocess}
               isReprocessing={isReprocessing}
             />
 
-                <ChunkDebugPanel currentStudy={currentStudy} extractions={extractions} />
+            {showSectionProgress && (
+              <SectionDetectionProgress
+                sections={detectedSections}
+                currentPage={currentPage}
+                totalPages={totalPages}
+                isProcessing={isCreatingStudyRef.current}
+              />
+            )}
+
+            <ChunkDebugPanel currentStudy={currentStudy} extractions={extractions} />
+            
+            {currentStudy && (
+              <ExtractionDebugPanel 
+                studyId={currentStudy.id}
+                onReextract={reextractVisuals}
+                onReextractChunks={reextractTextChunks}
+                onReextractAll={reextractAll}
+              />
+            )}
               </div>
             </div>
             <ExtractionForm
@@ -452,9 +664,32 @@ const Index = () => {
               onExtraction={handleExtraction}
               pdfText={pdfText}
               studyId={currentStudy?.id}
+              studyName={currentStudy?.name}
             />
           </div>
         </ResizablePanel>
+
+        {/* Collapsed Left Panel Indicator */}
+        {leftPanelCollapsed && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => leftPanelRef.current?.expand()}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-50 h-24 w-8 rounded-none rounded-r-md border-r border-border bg-card hover:bg-muted shadow-sm"
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <ChevronRight className="h-4 w-4" />
+                  <span className="text-[10px] font-medium writing-mode-vertical">Form</span>
+                </div>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>Expand Form Panel</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         <ResizableHandle withHandle className="hover:bg-primary/20 transition-colors" />
 
@@ -480,11 +715,42 @@ const Index = () => {
             studySections={currentStudy?.pdf_chunks?.sections}
             onBatchExtract={handleBatchExtract}
             isBatchExtracting={isBatchExtracting}
-            />
+            onAnnotationsChange={handleAnnotationsChange}
+            initialAnnotations={loadedAnnotations}
+            searchResults={searchResults}
+            activeSearchIndex={activeSearchIndex}
+            pdfDocRef={pdfDocRef}
+            extractedFigures={extractedFigures}
+            studyId={currentStudy?.id}
+            onNavigateToChunk={handleNavigateToChunk}
+            activeCitationIndices={activeCitationIndices}
+          />
           </div>
         </ResizablePanel>
 
         <ResizableHandle withHandle className="hover:bg-primary/20 transition-colors" />
+
+        {/* Collapsed Right Panel Indicator */}
+        {rightPanelCollapsed && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => rightPanelRef.current?.expand()}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-50 h-24 w-8 rounded-none rounded-l-md border-l border-border bg-card hover:bg-muted shadow-sm"
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="text-[10px] font-medium writing-mode-vertical">Trace</span>
+                </div>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p>Expand Trace Log Panel</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         {/* Right Panel - Trace Log */}
         <ResizablePanel
@@ -527,28 +793,100 @@ const Index = () => {
               onUpdateExtractions={handleBatchUpdateExtractions}
             />
             {currentStudy && (
-              <ExportDialog
-                studyId={currentStudy.id}
-                studyName={currentStudy.name}
-              />
-              )}
+              <>
+                <ExportDialog
+                  studyId={currentStudy.id}
+                  studyName={currentStudy.name}
+                  annotations={pdfAnnotations}
+                />
+                <BulkStudyExportDialog
+                  studies={studies}
+                  currentStudyAnnotations={pdfAnnotations}
+                  currentStudyId={currentStudy.id}
+                />
+              </>
+            )}
               </div>
             </div>
-            <TraceLog
-              extractions={extractions}
-              onJumpToExtraction={handleJumpToExtraction}
-              onClearAll={() => setExtractions([])}
-              onUpdateExtraction={handleUpdateExtraction}
-              onHighlightSources={handleHighlightSources}
-              onClearSourceHighlights={handleClearSourceHighlights}
-              onJumpToCitation={handleJumpToCitation}
-              pdfFile={pdfFile}
-              currentStudy={currentStudy}
-            />
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+              <TabsList className="grid w-full grid-cols-4 mb-4">
+                <TabsTrigger value="extractions">
+                  Extractions ({extractions.length})
+                </TabsTrigger>
+                <TabsTrigger value="figures">
+                  Figures ({extractedFigures.length})
+                </TabsTrigger>
+                <TabsTrigger value="tables">
+                  Tables
+                </TabsTrigger>
+                <TabsTrigger value="citations">
+                  Citations
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="extractions" className="flex-1 overflow-auto">
+                <TraceLog
+                  extractions={extractions}
+                  onJumpToExtraction={handleJumpToExtraction}
+                  onClearAll={() => setExtractions([])}
+                  onUpdateExtraction={handleUpdateExtraction}
+                  onHighlightSources={handleHighlightSources}
+                  onClearSourceHighlights={handleClearSourceHighlights}
+                  onJumpToCitation={handleJumpToCitation}
+                  pdfFile={pdfFile}
+                  currentStudy={currentStudy}
+                  onSearchInPDF={handleSearchResults}
+                  onHighlightSearchResult={handleHighlightSearchResult}
+                  pdfDoc={pdfDocRef.current}
+                  currentScale={scale}
+                />
+              </TabsContent>
+              <TabsContent value="figures" className="flex-1 overflow-auto">
+                <FigureExtractionPanel
+                  figures={extractedFigures}
+                  onPageNavigate={(pageNum) => setCurrentPage(pageNum)}
+                />
+              </TabsContent>
+              <TabsContent value="tables" className="flex-1 overflow-auto">
+                {currentStudy && (
+                  <TableExtractionPanel
+                    studyId={currentStudy.id}
+                    onNavigateToTable={(pageNum) => setCurrentPage(pageNum)}
+                  />
+                )}
+              </TabsContent>
+              <TabsContent value="citations" className="flex-1 overflow-auto">
+                {currentStudy && (
+                  <SourceProvenancePanel
+                    studyId={currentStudy.id}
+                    extractions={extractions.map(ext => ({
+                      id: ext.id,
+                      field_name: ext.fieldName,
+                      text: ext.text,
+                      source_citations: ext.sourceCitations || null,
+                      validation_status: ext.validation_status,
+                      page: ext.page,
+                    }))}
+                    onNavigateToChunk={handleNavigateToChunk}
+                  />
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      
+      {/* PDF Processing Progress Dialog */}
+      <PDFProcessingDialog open={isCreatingStudyRef.current} status={processingStatus} />
+      
+      {/* Bulk Reprocess Progress Dialog */}
+      <BulkReprocessDialog 
+        open={showBulkReprocess} 
+        progress={bulkReprocessProgress}
+        onClose={handleCloseBulkReprocess}
+        isComplete={isBulkReprocessComplete}
+      />
     </div>
+    </TooltipProvider>
   );
 };
 

@@ -7,6 +7,8 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, AlertTriangle, Settings2, Sparkles, Zap, Clock } from "lucide-react";
@@ -20,6 +22,10 @@ interface ReviewerConfig {
   prompt_strategy: string;
   priority: number;
   enabled: boolean;
+  seed?: number | null;
+  max_tokens?: number;
+  reasoning_effort?: string | null;
+  custom_parameters?: any;
 }
 
 interface ReviewerSettingsDialogProps {
@@ -79,20 +85,29 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
     setHasChanges(true);
   };
 
+  const handleFieldChange = (id: string, field: keyof ReviewerConfig, value: any) => {
+    setReviewers(prev =>
+      prev.map(r => (r.id === id ? { ...r, [field]: value } : r))
+    );
+    setHasChanges(true);
+  };
+
   const saveChanges = async () => {
     setSaving(true);
     try {
-      const updates = reviewers.map(reviewer => ({
-        id: reviewer.id,
-        enabled: reviewer.enabled,
-        temperature: reviewer.temperature,
-      }));
-
-      for (const update of updates) {
+      for (const reviewer of reviewers) {
         const { error } = await supabase
           .from('reviewer_configs')
-          .update({ enabled: update.enabled, temperature: update.temperature })
-          .eq('id', update.id);
+          .update({
+            enabled: reviewer.enabled,
+            temperature: reviewer.temperature,
+            model: reviewer.model as any,
+            seed: reviewer.seed,
+            max_tokens: reviewer.max_tokens,
+            reasoning_effort: reviewer.reasoning_effort,
+            custom_parameters: reviewer.custom_parameters
+          })
+          .eq('id', reviewer.id);
 
         if (error) throw error;
       }
@@ -228,28 +243,149 @@ export const ReviewerSettingsDialog = ({ open, onOpenChange }: ReviewerSettingsD
               </CardHeader>
               
               {reviewer.enabled && (
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 space-y-4">
+                  {/* Model Selection */}
+                  <div className="space-y-2">
+                    <Label className="text-sm">AI Model</Label>
+                    <Select
+                      value={reviewer.model}
+                      onValueChange={(value) => handleFieldChange(reviewer.id, 'model', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="google/gemini-2.5-pro">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">Gemini 2.5 Pro</span>
+                            <span className="text-xs text-muted-foreground">Best quality, slower, multimodal</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="google/gemini-2.5-flash">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">Gemini 2.5 Flash</span>
+                            <span className="text-xs text-muted-foreground">Balanced speed & quality</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="google/gemini-2.5-flash-lite">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">Gemini 2.5 Flash Lite</span>
+                            <span className="text-xs text-muted-foreground">Fastest, cheapest</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="openai/gpt-5">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">GPT-5</span>
+                            <span className="text-xs text-muted-foreground">Powerful reasoning, multimodal</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="openai/gpt-5-mini">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">GPT-5 Mini</span>
+                            <span className="text-xs text-muted-foreground">Fast & cost-efficient</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="openai/gpt-5-nano">
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">GPT-5 Nano</span>
+                            <span className="text-xs text-muted-foreground">Ultra-fast, simple tasks</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Temperature Slider - Only for Gemini models */}
+                  {reviewer.model.startsWith('google/') && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">
+                          Temperature: {reviewer.temperature.toFixed(2)}
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          {reviewer.temperature < 0.3 ? 'Very Conservative' :
+                           reviewer.temperature < 0.6 ? 'Balanced' :
+                           reviewer.temperature < 0.9 ? 'Creative' : 'Very Creative'}
+                        </span>
+                      </div>
+                      <Slider
+                        value={[reviewer.temperature]}
+                        onValueChange={(value) => handleTemperatureChange(reviewer.id, value)}
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+
+                  {!reviewer.model.startsWith('google/') && (
+                    <Alert>
+                      <AlertDescription className="text-xs">
+                        OpenAI models use default temperature (1.0) and cannot be adjusted.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Seed Input */}
+                  <div className="space-y-2">
+                    <Label className="text-sm flex items-center gap-2">
+                      Seed (Optional)
+                      <span className="text-xs text-muted-foreground font-normal">
+                        For reproducible results
+                      </span>
+                    </Label>
+                    <Input
+                      type="number"
+                      value={reviewer.seed ?? ''}
+                      onChange={(e) => handleFieldChange(reviewer.id, 'seed', e.target.value ? parseInt(e.target.value) : null)}
+                      placeholder="Leave empty for random"
+                      className="h-8"
+                    />
+                  </div>
+
+                  {/* Max Tokens Slider */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm">
-                        Temperature: {reviewer.temperature.toFixed(2)}
+                        Max Tokens: {reviewer.max_tokens || 4000}
                       </Label>
-                      <span className="text-xs text-muted-foreground">
-                        {reviewer.temperature < 0.3 ? 'Very Conservative' :
-                         reviewer.temperature < 0.6 ? 'Balanced' :
-                         reviewer.temperature < 0.9 ? 'Creative' : 'Very Creative'}
-                      </span>
                     </div>
                     <Slider
-                      value={[reviewer.temperature]}
-                      onValueChange={(value) => handleTemperatureChange(reviewer.id, value)}
-                      min={0}
-                      max={1}
-                      step={0.1}
+                      value={[reviewer.max_tokens || 4000]}
+                      onValueChange={(value) => handleFieldChange(reviewer.id, 'max_tokens', value[0])}
+                      min={500}
+                      max={32000}
+                      step={500}
                       className="w-full"
-                      disabled={!reviewer.enabled}
                     />
                   </div>
+
+                  {/* Reasoning Effort (only for reasoning models) */}
+                  {(reviewer.model.includes('o1') || reviewer.model.includes('o3') || reviewer.model.includes('o4')) && (
+                    <div className="space-y-2">
+                      <Label className="text-sm flex items-center gap-2">
+                        Reasoning Effort
+                        <Badge variant="secondary" className="text-xs">o1/o3/o4 only</Badge>
+                      </Label>
+                      <Select
+                        value={reviewer.reasoning_effort || 'medium'}
+                        onValueChange={(value) => handleFieldChange(reviewer.id, 'reasoning_effort', value)}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low - Faster, less depth</SelectItem>
+                          <SelectItem value="medium">Medium - Balanced</SelectItem>
+                          <SelectItem value="high">High - Deep reasoning</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Controls how much computational effort the model spends on reasoning
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               )}
             </Card>

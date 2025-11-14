@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Upload, ChevronLeft, ChevronRight, Box, Camera, FileText, Search as SearchIcon, FileDown, Paintbrush } from "lucide-react";
+import { Upload, ChevronLeft, ChevronRight, Box, Camera, FileText, Search as SearchIcon, FileDown, Paintbrush, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Viewer, Worker } from '@react-pdf-viewer/core';
 import { highlightPlugin, Trigger } from '@react-pdf-viewer/highlight';
@@ -17,14 +17,19 @@ import { HighlightToolbar } from "./HighlightToolbar";
 import { SearchPanel } from "./SearchPanel";
 import { CitationLinkPanel } from "./CitationLinkPanel";
 import { SectionNavigator } from "./SectionNavigator";
+import { BoundingBoxControls, type BoundingBoxVisibility } from "./BoundingBoxControls";
+import { FigureCaptionTooltip } from "./FigureCaptionTooltip";
+import { TableDetailTooltip } from "./TableDetailTooltip";
 import { useAnnotationCanvas } from "@/hooks/useAnnotationCanvas";
 import { usePageAnnotations } from "@/hooks/usePageAnnotations";
 import { useCanvasHistory } from "@/hooks/useCanvasHistory";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useTextHighlights } from "@/hooks/useTextHighlights";
+import { useBoundingBoxVisualization } from "@/hooks/useBoundingBoxVisualization";
 import { TextHighlight } from "@/types/highlights";
 import { navigateToPosition } from "@/lib/pdfNavigation";
 import type { SourceCitation } from "@/lib/citationDetector";
+import type { SearchResult } from "@/lib/pdfSearch";
 import * as pdfjsLib from "pdfjs-dist";
 import { extractTextWithCoordinates, findTextInRegion, pdfToScreenCoords } from "@/lib/textExtraction";
 
@@ -51,6 +56,15 @@ interface PDFViewerProps {
   studySections?: any[];
   onBatchExtract?: (section: any) => void;
   isBatchExtracting?: boolean;
+  onAnnotationsChange?: (annotations: any[]) => void;
+  initialAnnotations?: any[];
+  searchResults?: SearchResult[];
+  activeSearchIndex?: number;
+  pdfDocRef?: React.MutableRefObject<pdfjsLib.PDFDocumentProxy | null>;
+  extractedFigures?: any[];
+  studyId?: string;
+  onNavigateToChunk?: (pageNum: number, chunkIndex: number) => void;
+  activeCitationIndices?: number[];
 }
 
 export const PDFViewer = ({
@@ -71,7 +85,16 @@ export const PDFViewer = ({
   onJumpToExtraction,
   studySections,
   onBatchExtract,
-  isBatchExtracting = false
+  isBatchExtracting = false,
+  onAnnotationsChange,
+  initialAnnotations = [],
+  searchResults = [],
+  activeSearchIndex = 0,
+  pdfDocRef,
+  extractedFigures = [],
+  studyId,
+  onNavigateToChunk,
+  activeCitationIndices = [],
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
@@ -88,7 +111,6 @@ export const PDFViewer = ({
   const [importResult, setImportResult] = useState<any>(null);
   const [isLoadingAnnotations, setIsLoadingAnnotations] = useState(false);
   const [pdfFullText, setPdfFullText] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [flashCoords, setFlashCoords] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [hoveredRegion, setHoveredRegion] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -98,6 +120,16 @@ export const PDFViewer = ({
   const [drawingMode, setDrawingMode] = useState(false);
   const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
   const [pageDimensions, setPageDimensions] = useState({ width: 800, height: 1000 });
+  
+  // Bounding box visualization states
+  const boundingBoxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [showBoundingBoxControls, setShowBoundingBoxControls] = useState(false);
+  const [boundingBoxVisibility, setBoundingBoxVisibility] = useState<BoundingBoxVisibility>({
+    textItems: false,
+    semanticChunks: false,
+    tables: false,
+    figures: false,
+  });
 
   // Use custom hooks
   const { 
@@ -107,6 +139,8 @@ export const PDFViewer = ({
     hasAnnotation,
     getAllAnnotations,
     pageAnnotations,
+    restoreAnnotations,
+    clearAllAnnotations
   } = usePageAnnotations();
 
   const {
@@ -137,6 +171,17 @@ export const PDFViewer = ({
     finishPolygon,
     polygonPointCount,
   } = useAnnotationCanvas(drawingCanvasRef, pageDimensions.width, pageDimensions.height, drawingMode);
+
+  // Bounding box visualization
+  const { hoveredFigure, hoveredTable } = useBoundingBoxVisualization({
+    pdfDoc: pdfDocRef?.current || null,
+    currentPage,
+    scale,
+    visibility: boundingBoxVisibility,
+    canvasRef: boundingBoxCanvasRef,
+    extractedFigures,
+    studyId,
+  });
 
   const {
     saveState,
@@ -219,6 +264,27 @@ export const PDFViewer = ({
     const thumbnail = fabricCanvas.toDataURL({ format: 'png', quality: 0.5, multiplier: 1 });
     savePageAnnotation(currentPage, json, thumbnail);
   }, [fabricCanvas, drawingMode, currentPage, savePageAnnotation]);
+
+  // Notify parent component when annotations change
+  useEffect(() => {
+    if (onAnnotationsChange) {
+      onAnnotationsChange(getAllAnnotations());
+    }
+  }, [pageAnnotations, onAnnotationsChange, getAllAnnotations]);
+
+  // Restore initial annotations when study changes
+  useEffect(() => {
+    if (initialAnnotations && initialAnnotations.length > 0) {
+      console.log(`Restoring ${initialAnnotations.length} annotations`);
+      restoreAnnotations(initialAnnotations);
+      toast.success(`Loaded ${initialAnnotations.length} annotated pages`);
+    } else {
+      // Clear annotations when switching to a study with no annotations
+      if (pageAnnotations.size > 0) {
+        clearAllAnnotations();
+      }
+    }
+  }, [initialAnnotations]);
 
   // Load annotations for current page
   useEffect(() => {
@@ -347,7 +413,7 @@ export const PDFViewer = ({
     );
 
     const pageHighlights = getHighlightsForPage(props.pageIndex + 1);
-    const pageSearchResults = searchResults.filter(r => r.page === props.pageIndex + 1 && r.coordinates);
+    const pageSearchResults = searchResults.filter(r => r.page === props.pageIndex + 1 && r.boundingBox);
     const pageSourceHighlights = highlightedSources.filter(s => s.page === props.pageIndex + 1);
 
     return (
@@ -411,7 +477,7 @@ export const PDFViewer = ({
 
         {/* Search Result Highlights */}
         {pageSearchResults.map((result, idx) => {
-          const coords = result.coordinates;
+          const coords = result.boundingBox;
           
           return (
             <div
@@ -428,7 +494,7 @@ export const PDFViewer = ({
                 border: '2px solid hsl(var(--extraction-search))',
                 pointerEvents: 'auto',
               }}
-              title={`Search result: ${result.text}`}
+              title={`Search result: ${result.matchedText}`}
             />
           );
         })}
@@ -529,8 +595,7 @@ export const PDFViewer = ({
   }, [onPageChange]);
 
   // Handle search results with highlight creation
-  const handleSearchResults = useCallback((results: any[]) => {
-    setSearchResults(results);
+  const handleInternalSearchResults = useCallback((results: any[]) => {
     
     // Clear previous search highlights
     clearHighlightsOfType('search');
@@ -1000,6 +1065,16 @@ export const PDFViewer = ({
             Search
           </Button>
           <Button
+            variant={showBoundingBoxControls ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowBoundingBoxControls(!showBoundingBoxControls)}
+            disabled={!file}
+            className="gap-2"
+          >
+            <Eye className="h-4 w-4" />
+            Debug
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={handleImportAnnotations}
@@ -1059,17 +1134,27 @@ export const PDFViewer = ({
         />
       )}
 
+      {/* Bounding Box Controls */}
+      {showBoundingBoxControls && file && (
+        <div className="p-4 border-t border-border">
+          <BoundingBoxControls
+            visibility={boundingBoxVisibility}
+            onVisibilityChange={setBoundingBoxVisibility}
+          />
+        </div>
+      )}
+
       {/* PDF Display */}
       <div className="flex-1 overflow-auto bg-muted/30 p-4 relative">
         {searchOpen && (
           <SearchPanel
             pdfText={pdfFullText}
-            onSearchResult={handleSearchResults}
+            onSearchResult={handleInternalSearchResults}
             onNavigateToResult={handleSearchResultNavigation}
             isOpen={searchOpen}
             onClose={() => {
               setSearchOpen(false);
-              setSearchResults([]);
+              
               clearHighlightsOfType('search');
             }}
             pageTextCache={pageTextCache}
@@ -1175,16 +1260,38 @@ export const PDFViewer = ({
 
             <Worker workerUrl={`https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`}>
               <div style={{ height: '750px' }}>
-                <Viewer
-                  fileUrl={fileUrl}
-                  plugins={[highlightPluginInstance, searchPluginInstance]}
-                  onDocumentLoad={handleDocumentLoad}
-                  onPageChange={handlePageChange}
-                  initialPage={currentPage - 1}
-                  defaultScale={scale}
-                />
+                {fileUrl ? (
+                  <Viewer
+                    fileUrl={fileUrl}
+                    plugins={[highlightPluginInstance, searchPluginInstance]}
+                    onDocumentLoad={handleDocumentLoad}
+                    onPageChange={handlePageChange}
+                    initialPage={currentPage - 1}
+                    defaultScale={scale}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    No PDF loaded. Please upload a PDF file to begin.
+                  </div>
+                )}
               </div>
             </Worker>
+
+            {/* Bounding Box Visualization Overlay */}
+            {Object.values(boundingBoxVisibility).some(Boolean) && file && (
+              <div className="absolute top-0 left-0 pointer-events-none z-5" style={{ width: '100%', height: '100%' }}>
+                <canvas
+                  ref={boundingBoxCanvasRef}
+                  style={{ 
+                    position: 'absolute',
+                    top: 0,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    mixBlendMode: 'multiply',
+                  }}
+                />
+              </div>
+            )}
 
             {/* Drawing Canvas Overlay */}
             {drawingMode && (
@@ -1229,6 +1336,24 @@ export const PDFViewer = ({
               </div>
             )}
           </div>
+        )}
+
+        {/* Figure Caption Tooltip */}
+        {hoveredFigure && (
+          <FigureCaptionTooltip
+            figure={hoveredFigure.figure}
+            x={hoveredFigure.x}
+            y={hoveredFigure.y}
+          />
+        )}
+
+        {/* Table Detail Tooltip */}
+        {hoveredTable && (
+          <TableDetailTooltip
+            table={hoveredTable.table}
+            mouseX={hoveredTable.x}
+            mouseY={hoveredTable.y}
+          />
         )}
       </div>
     </div>
