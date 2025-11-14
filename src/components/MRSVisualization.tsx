@@ -45,6 +45,8 @@ export const MRSVisualization = ({ mrsData, studyArms }: MRSVisualizationProps) 
     // Process data for the most recent timepoint
     const latestMRS = mrsData[mrsData.length - 1];
     
+    if (!latestMRS) return { chartData: [], favorableOutcomes: [] };
+    
     // Transform data for recharts
     const data = [];
     for (let i = 0; i <= 6; i++) {

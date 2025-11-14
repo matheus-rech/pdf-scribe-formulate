@@ -16,12 +16,12 @@ interface ConflictItem {
   id: string;
   extraction_id: string;
   field_name: string;
-  consensus_value: string;
+  consensus_value: string | null;
   agreement_level: number;
   total_reviewers: number;
   agreeing_reviewers: number;
-  conflict_types: string[];
-  human_review_status: string;
+  conflict_types: string[] | null;
+  human_review_status: string | null;
   created_at: string;
 }
 

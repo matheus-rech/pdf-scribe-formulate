@@ -485,10 +485,10 @@ export const PDFViewer = ({
               className="text-highlight"
               style={{
                 position: 'absolute',
-                left: `${coords.x}px`,
-                top: `${coords.y}px`,
-                width: `${coords.width}px`,
-                height: `${coords.height}px`,
+                left: `${coords?.x || 0}px`,
+                top: `${coords?.y || 0}px`,
+                width: `${coords?.width || 0}px`,
+                height: `${coords?.height || 0}px`,
                 backgroundColor: 'hsl(var(--extraction-search))',
                 opacity: 0.5,
                 border: '2px solid hsl(var(--extraction-search))',

@@ -494,7 +494,7 @@ export const ExtractionForm = ({
         extractedData,
         confidenceScores: scores,
         stepNumber,
-        stepTitle: STEPS[stepNumber - 1].title
+        stepTitle: STEPS[stepNumber - 1]?.title || 'Unknown Step'
       });
 
     } catch (error: any) {
@@ -1146,7 +1146,7 @@ export const ExtractionForm = ({
         <div>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-semibold mb-1">{STEPS[currentStep - 1].title}</h2>
+              <h2 className="text-xl font-semibold mb-1">{STEPS[currentStep - 1]?.title || 'Extraction Step'}</h2>
               <p className="text-sm text-muted-foreground">
                 {pdfLoaded ? "Click on a field, then select text from the PDF" : "Load a PDF to begin extraction"}
               </p>
