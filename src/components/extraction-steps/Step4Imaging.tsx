@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { booleanSelectHelpers } from "@/lib/selectValidation";
 
 interface Step4Props {
   formData: Record<string, string>;
@@ -91,51 +92,75 @@ export const Step4Imaging = ({ formData, onUpdate, onFieldFocus, disabled }: Ste
           <div className="space-y-2">
             <Label htmlFor="brainstemInvolvement">Brainstem Involvement?</Label>
             <Select
-              value={formData.brainstemInvolvement || 'null'}
-              onValueChange={(value) => onUpdate({ brainstemInvolvement: value })}
+              value={booleanSelectHelpers.toValue(
+                formData.brainstemInvolvement === 'true' ? true : 
+                formData.brainstemInvolvement === 'false' ? false : 
+                null
+              )}
+              onValueChange={(value) => onUpdate({ 
+                brainstemInvolvement: booleanSelectHelpers.fromValue(value)?.toString() || 'null'
+              })}
               disabled={disabled}
             >
               <SelectTrigger id="brainstemInvolvement">
-                <SelectValue />
+                <SelectValue placeholder="Select..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="null">Unknown</SelectItem>
-                <SelectItem value="true">Yes</SelectItem>
-                <SelectItem value="false">No</SelectItem>
+                {booleanSelectHelpers.options.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="supratentorialInvolvement">Supratentorial?</Label>
             <Select
-              value={formData.supratentorialInvolvement || 'null'}
-              onValueChange={(value) => onUpdate({ supratentorialInvolvement: value })}
+              value={booleanSelectHelpers.toValue(
+                formData.supratentorialInvolvement === 'true' ? true : 
+                formData.supratentorialInvolvement === 'false' ? false : 
+                null
+              )}
+              onValueChange={(value) => onUpdate({ 
+                supratentorialInvolvement: booleanSelectHelpers.fromValue(value)?.toString() || 'null'
+              })}
               disabled={disabled}
             >
               <SelectTrigger id="supratentorialInvolvement">
-                <SelectValue />
+                <SelectValue placeholder="Select..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="null">Unknown</SelectItem>
-                <SelectItem value="true">Yes</SelectItem>
-                <SelectItem value="false">No</SelectItem>
+                {booleanSelectHelpers.options.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="nonCerebellarStroke">Non-cerebellar?</Label>
             <Select
-              value={formData.nonCerebellarStroke || 'null'}
-              onValueChange={(value) => onUpdate({ nonCerebellarStroke: value })}
+              value={booleanSelectHelpers.toValue(
+                formData.nonCerebellarStroke === 'true' ? true : 
+                formData.nonCerebellarStroke === 'false' ? false : 
+                null
+              )}
+              onValueChange={(value) => onUpdate({ 
+                nonCerebellarStroke: booleanSelectHelpers.fromValue(value)?.toString() || 'null'
+              })}
               disabled={disabled}
             >
               <SelectTrigger id="nonCerebellarStroke">
-                <SelectValue />
+                <SelectValue placeholder="Select..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="null">Unknown</SelectItem>
-                <SelectItem value="true">Yes</SelectItem>
-                <SelectItem value="false">No</SelectItem>
+                {booleanSelectHelpers.options.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
