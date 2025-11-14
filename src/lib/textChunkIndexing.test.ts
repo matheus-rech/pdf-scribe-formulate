@@ -49,7 +49,9 @@ describe('textChunkIndexing', () => {
       
       const map = buildCitationMap(chunks)
       
-      // CitationMap only preserves text, pageNum, bbox, and confidence
+      // CitationMap only preserves text, pageNum, bbox, and confidence.
+      // Note: This structure may not match what consumers like CitationPanel expect (e.g., Citation interface with index, sentence, and pageNum).
+      // If CitationPanel expects a different structure, an adapter/transformer may be needed.
       expect(map[5]).toMatchObject({
         text: 'Test sentence.',
         pageNum: 3,
