@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import type { BoundingBoxVisibility } from "@/components/BoundingBoxControls";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TextItem {
   text: string;
@@ -42,6 +43,35 @@ export const useBoundingBoxVisualization = ({
     y: number;
   } | null>(null);
   const [extractedTables, setExtractedTables] = useState<any[]>([]);
+
+  // Fetch tables from database when studyId changes
+  useEffect(() => {
+    const fetchTables = async () => {
+      if (!studyId) {
+        setExtractedTables([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await (supabase as any)
+          .from('pdf_tables')
+          .select('*')
+          .eq('study_id', studyId);
+
+        if (error) {
+          console.error('Error fetching tables:', error);
+          setExtractedTables([]);
+        } else {
+          setExtractedTables(data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching tables:', err);
+        setExtractedTables([]);
+      }
+    };
+
+    fetchTables();
+  }, [studyId]);
 
   /**
    * Extract text items with coordinates from PDF page
