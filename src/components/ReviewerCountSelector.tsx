@@ -34,12 +34,19 @@ export const ReviewerCountSelector = ({ value, onChange }: ReviewerCountSelector
 
     // Get user settings
     const { data: userSettings } = await supabase
-      .from('extraction_settings')
+      .from('extraction_settings' as any)
       .select('*')
-      .single();
+      .maybeSingle();
 
     if (userSettings) {
-      setSettings(userSettings);
+      const settingsData = userSettings as any;
+      if (settingsData.min_reviewers !== undefined) {
+        setSettings({
+          min_reviewers: settingsData.min_reviewers,
+          max_reviewers: settingsData.max_reviewers,
+          default_reviewers: settingsData.default_reviewers
+        });
+      }
     }
   };
 
