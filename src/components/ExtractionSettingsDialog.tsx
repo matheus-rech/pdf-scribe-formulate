@@ -156,10 +156,10 @@ export const ExtractionSettingsDialog = ({ open, onOpenChange }: ExtractionSetti
                   </Badge>
                 </div>
                 <Slider
-                  value={[settings.default_reviewers]}
-                  onValueChange={(v) => updateSetting('default_reviewers', Math.min(v[0], enabledReviewerCount))}
-                  min={settings.min_reviewers}
-                  max={Math.min(settings.max_reviewers, enabledReviewerCount)}
+                  value={[settings?.default_reviewers || 3]}
+                  onValueChange={(v) => updateSetting('default_reviewers', Math.min(v[0], enabledReviewerCount || 7))}
+                  min={settings?.min_reviewers || 1}
+                  max={Math.min(settings?.max_reviewers || 7, enabledReviewerCount)}
                   step={1}
                   className="w-full"
                 />
@@ -201,10 +201,10 @@ export const ExtractionSettingsDialog = ({ open, onOpenChange }: ExtractionSetti
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label>Even Reviewers (2, 4, 6, 8)</Label>
-                  <Badge>{Math.round(settings.high_concordance_threshold_even * 100)}%</Badge>
+                  <Badge>{Math.round((settings?.high_concordance_threshold_even || 0.8) * 100)}%</Badge>
                 </div>
                 <Slider
-                  value={[settings.high_concordance_threshold_even * 100]}
+                  value={[(settings?.high_concordance_threshold_even || 0.8) * 100]}
                   onValueChange={(v) => updateSetting('high_concordance_threshold_even', v[0] / 100)}
                   min={50}
                   max={100}
@@ -219,10 +219,10 @@ export const ExtractionSettingsDialog = ({ open, onOpenChange }: ExtractionSetti
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label>Odd Reviewers (3, 5, 7)</Label>
-                  <Badge>{Math.round(settings.high_concordance_threshold_odd * 100)}%</Badge>
+                  <Badge>{Math.round((settings?.high_concordance_threshold_odd || 0.66) * 100)}%</Badge>
                 </div>
                 <Slider
-                  value={[settings.high_concordance_threshold_odd * 100]}
+                  value={[(settings?.high_concordance_threshold_odd || 0.66) * 100]}
                   onValueChange={(v) => updateSetting('high_concordance_threshold_odd', v[0] / 100)}
                   min={50}
                   max={100}

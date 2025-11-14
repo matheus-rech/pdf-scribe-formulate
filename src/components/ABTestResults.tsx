@@ -161,7 +161,7 @@ export const ABTestResults = ({ testId, open, onOpenChange }: ABTestResultsProps
                   </span>
                 </div>
                 <Progress 
-                  value={(Math.max(...stats.map(s => s.sample_size || 0)) / test?.min_sample_size) * 100}
+                  value={(Math.max(...stats.map(s => s.sample_size || 0)) / (test?.min_sample_size || 1)) * 100}
                 />
               </div>
             </CardContent>
@@ -173,7 +173,7 @@ export const ABTestResults = ({ testId, open, onOpenChange }: ABTestResultsProps
               const variantStats = getVariantStats(variant.id);
               const variantSig = getVariantSignificance(variant.id);
               const isWinner = test?.winner_variant === variant.variant_name;
-              const improvementVsControl = controlStats && variantStats.accuracy_rate
+              const improvementVsControl = controlStats && variantStats.accuracy_rate && controlStats.accuracy_rate
                 ? ((variantStats.accuracy_rate - controlStats.accuracy_rate) / controlStats.accuracy_rate * 100)
                 : 0;
 

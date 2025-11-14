@@ -272,8 +272,10 @@ export const ABTestDialog = ({ open, onOpenChange, onSuccess }: ABTestDialogProp
                     value={variant.variant_name}
                     onChange={(e) => {
                       const newVariants = [...variants];
-                      newVariants[index].variant_name = e.target.value;
-                      setVariants(newVariants);
+                      if (newVariants[index]) {
+                        newVariants[index].variant_name = e.target.value;
+                        setVariants(newVariants);
+                      }
                     }}
                     placeholder="Variant name"
                     className="w-1/3"
@@ -292,8 +294,10 @@ export const ABTestDialog = ({ open, onOpenChange, onSuccess }: ABTestDialogProp
                       value={variant.model}
                       onValueChange={(value) => {
                         const newVariants = [...variants];
-                        newVariants[index].model = value;
-                        setVariants(newVariants);
+                        if (newVariants[index]) {
+                          newVariants[index].model = value;
+                          setVariants(newVariants);
+                        }
                       }}
                     >
                       <SelectTrigger>
@@ -313,8 +317,10 @@ export const ABTestDialog = ({ open, onOpenChange, onSuccess }: ABTestDialogProp
                       value={variant.template_id || "none"}
                       onValueChange={(value) => {
                         const newVariants = [...variants];
-                        newVariants[index].template_id = value === "none" ? null : value;
-                        setVariants(newVariants);
+                        if (newVariants[index]) {
+                          newVariants[index].template_id = value === "none" ? null : value;
+                          setVariants(newVariants);
+                        }
                       }}
                     >
                       <SelectTrigger>

@@ -17,13 +17,13 @@ interface ReviewerConfig {
   id: string;
   name: string;
   model: string;
-  temperature: number;
+  temperature?: number;
   system_prompt: string;
   prompt_strategy: string;
   priority: number;
   enabled: boolean;
   seed?: number | null;
-  max_tokens?: number;
+  max_tokens?: number | null;
   reasoning_effort?: string | null;
   custom_parameters?: any;
 }
