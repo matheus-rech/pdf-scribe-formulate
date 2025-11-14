@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CitationHighlighter } from './CitationHighlighter';
+import { BatchCitationValidationDialog } from './BatchCitationValidationDialog';
 import { FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface ExtractionEntry {
@@ -37,13 +38,25 @@ export function SourceProvenancePanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          Source Provenance
-        </CardTitle>
-        <CardDescription>
-          Verify extracted data with precise source citations
-        </CardDescription>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Source Provenance
+            </CardTitle>
+            <CardDescription>
+              Verify extracted data with precise source citations
+            </CardDescription>
+          </div>
+          <BatchCitationValidationDialog
+            studyId={studyId}
+            extractionIds={extractions.map(e => e.id)}
+            onValidationComplete={() => {
+              // Trigger a re-fetch or update of extractions
+              window.location.reload();
+            }}
+          />
+        </div>
       </CardHeader>
       <CardContent>
         <div className="mb-4 p-3 bg-muted/50 rounded-lg">
