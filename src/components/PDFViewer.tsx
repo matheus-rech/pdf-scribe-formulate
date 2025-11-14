@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Upload, ChevronLeft, ChevronRight, Box, Camera, FileText, Search as SearchIcon, FileDown, Paintbrush } from "lucide-react";
+import { Upload, ChevronLeft, ChevronRight, Box, Camera, FileText, Search as SearchIcon, FileDown, Paintbrush, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Viewer, Worker } from '@react-pdf-viewer/core';
 import { highlightPlugin, Trigger } from '@react-pdf-viewer/highlight';
@@ -17,11 +17,13 @@ import { HighlightToolbar } from "./HighlightToolbar";
 import { SearchPanel } from "./SearchPanel";
 import { CitationLinkPanel } from "./CitationLinkPanel";
 import { SectionNavigator } from "./SectionNavigator";
+import { BoundingBoxControls, type BoundingBoxVisibility } from "./BoundingBoxControls";
 import { useAnnotationCanvas } from "@/hooks/useAnnotationCanvas";
 import { usePageAnnotations } from "@/hooks/usePageAnnotations";
 import { useCanvasHistory } from "@/hooks/useCanvasHistory";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useTextHighlights } from "@/hooks/useTextHighlights";
+import { useBoundingBoxVisualization } from "@/hooks/useBoundingBoxVisualization";
 import { TextHighlight } from "@/types/highlights";
 import { navigateToPosition } from "@/lib/pdfNavigation";
 import type { SourceCitation } from "@/lib/citationDetector";
@@ -57,6 +59,7 @@ interface PDFViewerProps {
   searchResults?: SearchResult[];
   activeSearchIndex?: number;
   pdfDocRef?: React.MutableRefObject<pdfjsLib.PDFDocumentProxy | null>;
+  extractedFigures?: any[];
 }
 
 export const PDFViewer = ({
@@ -82,7 +85,8 @@ export const PDFViewer = ({
   initialAnnotations = [],
   searchResults = [],
   activeSearchIndex = 0,
-  pdfDocRef
+  pdfDocRef,
+  extractedFigures = []
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
@@ -108,6 +112,16 @@ export const PDFViewer = ({
   const [drawingMode, setDrawingMode] = useState(false);
   const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
   const [pageDimensions, setPageDimensions] = useState({ width: 800, height: 1000 });
+  
+  // Bounding box visualization states
+  const boundingBoxCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [showBoundingBoxControls, setShowBoundingBoxControls] = useState(false);
+  const [boundingBoxVisibility, setBoundingBoxVisibility] = useState<BoundingBoxVisibility>({
+    textItems: false,
+    semanticChunks: false,
+    tables: false,
+    figures: false,
+  });
 
   // Use custom hooks
   const { 
@@ -149,6 +163,17 @@ export const PDFViewer = ({
     finishPolygon,
     polygonPointCount,
   } = useAnnotationCanvas(drawingCanvasRef, pageDimensions.width, pageDimensions.height, drawingMode);
+
+  // Bounding box visualization
+  useBoundingBoxVisualization({
+    pdfDoc: pdfDocRef?.current || null,
+    currentPage,
+    scale,
+    visibility: boundingBoxVisibility,
+    canvasRef: boundingBoxCanvasRef,
+    extractedFigures,
+    extractedTables: [], // TODO: Pass extracted tables when available
+  });
 
   const {
     saveState,
@@ -1032,6 +1057,16 @@ export const PDFViewer = ({
             Search
           </Button>
           <Button
+            variant={showBoundingBoxControls ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowBoundingBoxControls(!showBoundingBoxControls)}
+            disabled={!file}
+            className="gap-2"
+          >
+            <Eye className="h-4 w-4" />
+            Debug
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={handleImportAnnotations}
@@ -1089,6 +1124,16 @@ export const PDFViewer = ({
           onBatchExtract={onBatchExtract}
           isBatchExtracting={isBatchExtracting}
         />
+      )}
+
+      {/* Bounding Box Controls */}
+      {showBoundingBoxControls && file && (
+        <div className="p-4 border-t border-border">
+          <BoundingBoxControls
+            visibility={boundingBoxVisibility}
+            onVisibilityChange={setBoundingBoxVisibility}
+          />
+        </div>
       )}
 
       {/* PDF Display */}
@@ -1223,6 +1268,22 @@ export const PDFViewer = ({
                 )}
               </div>
             </Worker>
+
+            {/* Bounding Box Visualization Overlay */}
+            {Object.values(boundingBoxVisibility).some(Boolean) && file && (
+              <div className="absolute top-0 left-0 pointer-events-none z-5" style={{ width: '100%', height: '100%' }}>
+                <canvas
+                  ref={boundingBoxCanvasRef}
+                  style={{ 
+                    position: 'absolute',
+                    top: 0,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    mixBlendMode: 'multiply',
+                  }}
+                />
+              </div>
+            )}
 
             {/* Drawing Canvas Overlay */}
             {drawingMode && (
