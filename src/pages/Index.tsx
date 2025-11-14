@@ -4,6 +4,7 @@ import { ExtractionForm } from "@/components/ExtractionForm";
 import { PDFViewer } from "@/components/PDFViewer";
 import { TraceLog } from "@/components/TraceLog";
 import { FigureExtractionPanel } from "@/components/FigureExtractionPanel";
+import { TableExtractionPanel } from "@/components/TableExtractionPanel";
 import { StudyManager } from "@/components/StudyManager";
 import { ChunkDebugPanel } from "@/components/ChunkDebugPanel";
 import { SectionDetectionProgress } from "@/components/SectionDetectionProgress";
@@ -646,6 +647,7 @@ const Index = () => {
             activeSearchIndex={activeSearchIndex}
             pdfDocRef={pdfDocRef}
             extractedFigures={extractedFigures}
+            studyId={currentStudy?.id}
           />
           </div>
         </ResizablePanel>
@@ -731,12 +733,15 @@ const Index = () => {
               </div>
             </div>
             <Tabs defaultValue="extractions" className="h-full flex flex-col">
-              <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
                 <TabsTrigger value="extractions">
                   Extractions ({extractions.length})
                 </TabsTrigger>
                 <TabsTrigger value="figures">
                   Figures ({extractedFigures.length})
+                </TabsTrigger>
+                <TabsTrigger value="tables">
+                  Tables
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="extractions" className="flex-1 overflow-auto">
@@ -761,6 +766,14 @@ const Index = () => {
                   figures={extractedFigures}
                   onPageNavigate={(pageNum) => setCurrentPage(pageNum)}
                 />
+              </TabsContent>
+              <TabsContent value="tables" className="flex-1 overflow-auto">
+                {currentStudy && (
+                  <TableExtractionPanel
+                    studyId={currentStudy.id}
+                    onNavigateToTable={(pageNum) => setCurrentPage(pageNum)}
+                  />
+                )}
               </TabsContent>
             </Tabs>
           </div>

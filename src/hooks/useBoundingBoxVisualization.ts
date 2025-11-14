@@ -18,7 +18,7 @@ interface BoundingBoxVisualizationProps {
   visibility: BoundingBoxVisibility;
   canvasRef: React.RefObject<HTMLCanvasElement>;
   extractedFigures?: any[];
-  extractedTables?: any[];
+  studyId?: string;
 }
 
 export const useBoundingBoxVisualization = ({
@@ -28,7 +28,7 @@ export const useBoundingBoxVisualization = ({
   visibility,
   canvasRef,
   extractedFigures = [],
-  extractedTables = [],
+  studyId,
 }: BoundingBoxVisualizationProps) => {
   const animationFrameRef = useRef<number | null>(null);
   const [hoveredFigure, setHoveredFigure] = useState<{
@@ -36,6 +36,12 @@ export const useBoundingBoxVisualization = ({
     x: number;
     y: number;
   } | null>(null);
+  const [hoveredTable, setHoveredTable] = useState<{
+    table: any;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [extractedTables, setExtractedTables] = useState<any[]>([]);
 
   /**
    * Extract text items with coordinates from PDF page
@@ -418,16 +424,23 @@ export const useBoundingBoxVisualization = ({
     if (!canvas) return;
 
     canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseleave', () => setHoveredFigure(null));
+    canvas.addEventListener('mouseleave', () => {
+      setHoveredFigure(null);
+      setHoveredTable(null);
+    });
 
     return () => {
       canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mouseleave', () => setHoveredFigure(null));
+      canvas.removeEventListener('mouseleave', () => {
+        setHoveredFigure(null);
+        setHoveredTable(null);
+      });
     };
   }, [canvasRef, handleMouseMove]);
 
   return {
     renderBoundingBoxes,
     hoveredFigure,
+    hoveredTable,
   };
 };
