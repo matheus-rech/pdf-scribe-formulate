@@ -13,7 +13,8 @@ const MultiModelExtractSchema = z.object({
   stepNumber: z.number().int().min(1).max(8),
   pdfText: z.string().min(1).max(1000000),
   studyId: z.string().uuid(),
-  extractionId: z.string().uuid().optional()
+  extractionId: z.string().uuid().optional(),
+  numReviewers: z.number().int().min(2).max(20).optional() // NEW: Dynamic reviewer count
 });
 
 serve(async (req) => {
@@ -39,7 +40,7 @@ serve(async (req) => {
       );
     }
 
-    const { stepNumber, pdfText, studyId, extractionId } = validation.data;
+    const { stepNumber, pdfText, studyId, extractionId, numReviewers } = validation.data;
     
     // Generate a valid UUID for extraction_id if not provided or if invalid format
     const validExtractionId = extractionId && extractionId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) 
@@ -68,19 +69,39 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Get user's extraction settings for consensus thresholds
+    const { data: settings } = await supabase
+      .from('extraction_settings')
+      .select('*')
+      .single();
+
+    const extractionSettings = settings || {
+      min_reviewers: 2,
+      max_reviewers: 8,
+      default_reviewers: 3,
+      high_concordance_threshold_even: 0.80,
+      high_concordance_threshold_odd: 0.75,
+      auto_accept_high_concordance: true
+    };
+
     // Get active reviewer configurations
-    const { data: reviewers, error: reviewerError } = await supabase
+    const { data: allReviewers, error: reviewerError } = await supabase
       .from('reviewer_configs')
       .select('*')
       .eq('enabled', true)
       .order('priority', { ascending: true });
 
-    if (reviewerError || !reviewers || reviewers.length === 0) {
+    if (reviewerError || !allReviewers || allReviewers.length === 0) {
       console.error('Reviewer config error:', reviewerError);
       throw new Error('No active reviewers configured');
     }
 
-    console.log(`Found ${reviewers.length} active reviewers`);
+    // Dynamic reviewer selection based on numReviewers parameter
+    const requestedCount = numReviewers || extractionSettings.default_reviewers;
+    const actualCount = Math.min(requestedCount, allReviewers.length);
+    const reviewers = allReviewers.slice(0, actualCount);
+
+    console.log(`Using ${reviewers.length} of ${allReviewers.length} active reviewers (requested: ${requestedCount})`);
 
     // Get study chunks for section-aware extraction - RLS will enforce ownership
     const { data: study, error: studyError } = await supabase
@@ -176,8 +197,8 @@ serve(async (req) => {
 
     console.log(`${successfulReviews.length}/${reviews.length} reviewers completed successfully`);
 
-    // Calculate consensus for each field
-    const consensus = calculateConsensus(successfulReviews, schema);
+    // Calculate consensus with settings
+    const consensus = calculateConsensus(successfulReviews, schema, extractionSettings);
     
     // Detect conflicts
     const conflicts = detectConflicts(successfulReviews, consensus);
@@ -197,7 +218,10 @@ serve(async (req) => {
           agreeing_reviewers: consensusValue.agreeingCount,
           conflict_detected: consensusValue.hasConflict,
           conflict_types: consensusValue.conflictTypes || [],
-          requires_human_review: consensusValue.hasConflict && consensusValue.agreementLevel < 60
+          requires_human_review: consensusValue.requiresHumanReview || false,
+          threshold: consensusValue.threshold,
+          reviewer_parity: consensusValue.reviewerParity,
+          conflict_reason: consensusValue.conflictReason
         });
     }
 
@@ -237,7 +261,7 @@ ${text.substring(0, 8000)}
 
 Extract all available data. For any field you cannot find, use null. Provide your overall confidence (0-100) and reasoning.`;
 
-  // Build request body - only include temperature for Google models
+  // Build request body - enhanced with new parameters
   const requestBody: any = {
     model: reviewer.model,
     messages: [
@@ -283,6 +307,29 @@ Extract all available data. For any field you cannot find, use null. Provide you
     requestBody.temperature = reviewer.temperature;
   }
 
+  // Add optional parameters if configured
+  if (reviewer.seed !== null && reviewer.seed !== undefined) {
+    requestBody.seed = reviewer.seed;
+  }
+  if (reviewer.max_tokens) {
+    requestBody.max_tokens = reviewer.max_tokens;
+  }
+  // reasoning_effort for o1/o3/o4 models
+  if (reviewer.reasoning_effort && (modelString.includes('o1') || modelString.includes('o3') || modelString.includes('o4'))) {
+    requestBody.reasoning_effort = reviewer.reasoning_effort;
+  }
+  // Merge custom parameters if provided
+  if (reviewer.custom_parameters) {
+    Object.assign(requestBody, reviewer.custom_parameters);
+  }
+
+  console.log(`Calling AI for reviewer ${reviewer.name}`, {
+    model: reviewer.model,
+    seed: reviewer.seed,
+    max_tokens: reviewer.max_tokens,
+    reasoning_effort: reviewer.reasoning_effort
+  });
+
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -307,9 +354,12 @@ Extract all available data. For any field you cannot find, use null. Provide you
   return JSON.parse(toolCall.function.arguments);
 }
 
-function calculateConsensus(reviews: any[], schema: any): Record<string, any> {
+function calculateConsensus(reviews: any[], schema: any, settings: any): Record<string, any> {
   const consensus: Record<string, any> = {};
   const fieldNames = Object.keys(schema);
+  const numReviewers = reviews.length;
+  const isEven = numReviewers % 2 === 0;
+  const threshold = isEven ? settings.high_concordance_threshold_even : settings.high_concordance_threshold_odd;
 
   for (const fieldName of fieldNames) {
     const values: any[] = [];
@@ -328,7 +378,8 @@ function calculateConsensus(reviews: any[], schema: any): Record<string, any> {
         value: null,
         agreementLevel: 0,
         agreeingCount: 0,
-        hasConflict: false
+        hasConflict: false,
+        requiresHumanReview: false
       };
       continue;
     }
@@ -351,7 +402,18 @@ function calculateConsensus(reviews: any[], schema: any): Record<string, any> {
     }
 
     const agreementLevel = (maxCount / values.length) * 100;
-    const hasConflict = agreementLevel < 80 || valueCounts.size > 2;
+    const agreementRatio = maxCount / values.length;
+    const requiresHumanReview = agreementRatio < threshold;
+    
+    // Special case: 2 reviewers with disagreement
+    let conflictReason = null;
+    if (numReviewers === 2 && maxCount < 2) {
+      conflictReason = "Two reviewers disagree - human review required";
+    } else if (requiresHumanReview) {
+      conflictReason = `Low concordance for ${isEven ? 'even' : 'odd'} number of reviewers (need >${(threshold * 100).toFixed(0)}%)`;
+    }
+
+    const hasConflict = agreementLevel < 80 || valueCounts.size > 2 || requiresHumanReview;
 
     consensus[fieldName] = {
       value: consensusValue,
@@ -359,6 +421,10 @@ function calculateConsensus(reviews: any[], schema: any): Record<string, any> {
       agreeingCount: maxCount,
       totalCount: values.length,
       hasConflict,
+      requiresHumanReview,
+      conflictReason,
+      threshold: threshold * 100,
+      reviewerParity: isEven ? 'even' : 'odd',
       allValues: Array.from(valueCounts.keys()).map(k => JSON.parse(k)),
       confidences
     };
