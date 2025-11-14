@@ -51,6 +51,11 @@ export const ValidationWarningCard = ({
                   <AlertDescription className="text-sm">
                     <span className="font-medium">{warning.field}: </span>
                     {warning.message}
+                    {warning.suggestedFix && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Suggested value: <span className="font-mono font-semibold">{warning.suggestedFix}</span>
+                      </div>
+                    )}
                   </AlertDescription>
                 </div>
                 <div className="absolute right-2 top-2 flex items-center gap-1">
