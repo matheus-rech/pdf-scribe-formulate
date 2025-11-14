@@ -83,15 +83,14 @@ Get these values from your [Supabase project settings](https://app.supabase.com)
 The project includes database migrations in `supabase/migrations/`. To apply them:
 
 ```bash
-# Install Supabase CLI
-npm install -g supabase
-
-# Link to your project
-supabase link --project-ref your-project-id
+# Link to your project (using npx to avoid global installation)
+npx supabase link --project-ref your-project-id
 
 # Push migrations
-supabase db push
+npx supabase db push
 ```
+
+> **Note**: Using `npx supabase` avoids version conflicts across projects. If you prefer a global installation, you can run `npm install -g supabase`, but this is optional.
 
 ## Development
 
