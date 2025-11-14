@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.search-study-metadata]
 verify_jwt = true
+
+[functions.enhance-figure-caption]
+verify_jwt = true
