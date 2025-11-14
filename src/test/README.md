@@ -68,6 +68,10 @@ Location: `src/lib/*.test.ts`
 
 Test individual functions and utilities in isolation with mock data.
 
+**Key Test Files:**
+- `textChunkIndexing.test.ts` - PDF text extraction and citation indexing
+- `selectValidation.test.ts` - Select component validation utilities
+
 **Example:**
 ```typescript
 // src/lib/textChunkIndexing.test.ts
@@ -86,6 +90,10 @@ it('should create a citation map from chunks', () => {
 Location: `src/components/*.test.tsx`
 
 Test React components with user interactions using Testing Library.
+
+**Key Test Files:**
+- `CitationBadge.test.tsx` - Citation badge rendering and interactions
+- `CitationPanel.test.tsx` - Citation panel display and navigation
 
 **Example:**
 ```typescript
