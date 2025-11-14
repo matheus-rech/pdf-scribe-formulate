@@ -239,6 +239,145 @@ export const useStudyStorage = (userId: string | null) => {
         toast.error('Failed to extract figures, but study was created');
       }
 
+      // Extract tables from PDF
+      onProgress?.({
+        stage: 'complete',
+        progress: 95,
+        message: 'Extracting tables from PDF...'
+      });
+
+      try {
+        // Reload PDF for table extraction
+        const tablePdfDoc = await pdfjsLib.getDocument({
+          data: await pdfFile.arrayBuffer()
+        }).promise;
+
+        const { extractTablesFromPage } = await import('@/lib/pdfTableExtraction');
+        
+        const allTables: any[] = [];
+        for (let pageNum = 1; pageNum <= tablePdfDoc.numPages; pageNum++) {
+          const page = await tablePdfDoc.getPage(pageNum);
+          const pageTables = await extractTablesFromPage(page, pageNum);
+          allTables.push(...pageTables);
+        }
+
+        console.log(`📊 Table extraction complete: Found ${allTables.length} tables`);
+
+        // Save tables to database
+        if (allTables.length > 0) {
+          const tableRecords = allTables.map(table => ({
+            study_id: data.id,
+            user_id: userId,
+            table_id: table.id,
+            page_number: table.pageNum,
+            x: table.boundingBox.x,
+            y: table.boundingBox.y,
+            bbox_width: table.boundingBox.width,
+            bbox_height: table.boundingBox.height,
+            headers: table.headers,
+            rows: table.rows,
+            column_count: table.headers.length,
+            row_count: table.rows.length,
+            column_positions: table.columnPositions,
+            extraction_method: table.extractionMethod,
+            caption: null,
+            ai_enhanced: false,
+            confidence_score: null
+          }));
+
+          const { error: tableError } = await supabase
+            .from('pdf_tables' as any)
+            .insert(tableRecords as any);
+
+          if (tableError) {
+            console.error('Error saving tables:', tableError);
+            toast.error('Tables extracted but failed to save to database');
+          } else {
+            console.log(`✅ Saved ${allTables.length} tables to database`);
+            
+            // Enhance captions with AI
+            try {
+              // Get page text context for each table
+              const pageTexts = new Map<number, string>();
+              for (let pageNum = 1; pageNum <= tablePdfDoc.numPages; pageNum++) {
+                const page = await tablePdfDoc.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map((item: any) => item.str).join(' ');
+                pageTexts.set(pageNum, pageText);
+              }
+
+              // Group tables by page
+              const tablesByPage = new Map<number, any[]>();
+              allTables.forEach(table => {
+                if (!tablesByPage.has(table.pageNum)) {
+                  tablesByPage.set(table.pageNum, []);
+                }
+                tablesByPage.get(table.pageNum)!.push(table);
+              });
+
+              // Match captions for each page's tables
+              let matchedCount = 0;
+              for (const [pageNum, pageTables] of tablesByPage.entries()) {
+                const pageText = pageTexts.get(pageNum) || '';
+                
+                const { data: matchData, error: matchError } = await supabase.functions.invoke(
+                  'match-table-captions',
+                  {
+                    body: {
+                      tables: pageTables.map(t => ({
+                        tableId: t.id,
+                        x: t.boundingBox.x,
+                        y: t.boundingBox.y,
+                        columnCount: t.headers.length,
+                        rowCount: t.rows.length,
+                        headers: t.headers
+                      })),
+                      pageText,
+                      pageNumber: pageNum
+                    }
+                  }
+                );
+
+                if (matchError) {
+                  console.error(`Error matching table captions for page ${pageNum}:`, matchError);
+                  continue;
+                }
+
+                // Update tables with matched captions
+                if (matchData?.results) {
+                  for (const result of matchData.results) {
+                    if (result.caption && !result.error) {
+                      await supabase
+                        .from('pdf_tables')
+                        .update({
+                          caption: result.caption,
+                          confidence_score: result.confidence,
+                          ai_enhanced: true
+                        })
+                        .eq('study_id', data.id)
+                        .eq('table_id', result.tableId);
+                      
+                      matchedCount++;
+                    }
+                  }
+                }
+              }
+
+              if (matchedCount > 0) {
+                console.log(`🤖 AI-matched ${matchedCount}/${allTables.length} table captions`);
+              }
+            } catch (aiError) {
+              console.error('Error enhancing table captions:', aiError);
+              // Don't fail the entire process
+            }
+          }
+        }
+      } catch (tableError) {
+        console.error('Error extracting tables:', tableError);
+        // Don't fail the entire study creation
+        toast.error('Failed to extract tables, but study was created');
+      }
+
       onProgress?.({
         stage: 'complete',
         progress: 100,
