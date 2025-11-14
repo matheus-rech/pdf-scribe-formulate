@@ -1,42 +1,25 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-// Input validation schema
-const ValidateCitationSchema = z.object({
-  extractedText: z.string().min(1).max(10000),
-  sourceText: z.string().min(1).max(100000),
-  context: z.string().max(50000).optional()
-});
+import { 
+  citationValidationSchema,
+  corsHeaders,
+  handleCors,
+  createValidationErrorResponse
+} from '../_shared/validation-schemas.ts';
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   try {
     const body = await req.json();
     
-    // Validate input
-    const validation = ValidateCitationSchema.safeParse(body);
-    if (!validation.success) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Invalid input', 
-          details: validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
+    // Validate input using shared schema
+    const result = citationValidationSchema.safeParse(body);
+    if (!result.success) {
+      return createValidationErrorResponse(result.error, corsHeaders);
     }
 
-    const { extractedText, sourceText, context } = validation.data;
+    const { extractedText, sourceText, context } = result.data;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {

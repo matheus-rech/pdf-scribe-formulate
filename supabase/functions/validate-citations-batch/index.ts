@@ -1,9 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { 
+  batchValidationSchema,
+  corsHeaders,
+  handleCors,
+  createValidationErrorResponse
+} from '../_shared/validation-schemas.ts';
 
 interface ValidationResult {
   extraction_id: string;
@@ -16,16 +17,23 @@ interface ValidationResult {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { studyId, extractionIds } = await req.json();
+    const body = await req.json();
+    
+    // Validate input using shared schema
+    const result = batchValidationSchema.safeParse(body);
+    if (!result.success) {
+      return createValidationErrorResponse(result.error, corsHeaders);
+    }
+
+    const { studyId, extractionIds } = result.data;
 
     console.log('Starting batch citation validation', { studyId, extractionIds });
 
