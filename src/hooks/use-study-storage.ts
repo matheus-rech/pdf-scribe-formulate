@@ -707,6 +707,177 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
+  // Re-extract figures and tables for a study
+  const reextractVisuals = async (
+    studyId: string,
+    onProgress?: (message: string) => void
+  ): Promise<{ figures: number; tables: number; success: boolean }> => {
+    if (!userId) {
+      toast.error("User ID required - please log in");
+      return { figures: 0, tables: 0, success: false };
+    }
+
+    try {
+      onProgress?.('Loading study PDF...');
+      
+      // Get study
+      const { data: study, error: studyError } = await supabase
+        .from("studies")
+        .select("*")
+        .eq("id", studyId)
+        .single();
+
+      if (studyError || !study) {
+        toast.error("Study not found");
+        return { figures: 0, tables: 0, success: false };
+      }
+
+      // Load PDF
+      const pdfFile = await loadStudyPdf(study);
+      if (!pdfFile) {
+        toast.error("Failed to load PDF file");
+        return { figures: 0, tables: 0, success: false };
+      }
+
+      let figuresCount = 0;
+      let tablesCount = 0;
+
+      // ===== Re-extract Figures =====
+      onProgress?.('Re-extracting figures...');
+      try {
+        const pdfDoc = await pdfjsLib.getDocument({
+          data: await pdfFile.arrayBuffer()
+        }).promise;
+
+        const { allFigures } = await extractAllFigures(
+          pdfDoc,
+          (current, total) => {
+            onProgress?.(`Extracting figures: page ${current}/${total}...`);
+          }
+        );
+
+        if (allFigures.length > 0) {
+          // Delete old figures first
+          await supabase
+            .from('pdf_figures' as any)
+            .delete()
+            .eq('study_id', studyId);
+
+          const figureRecords = allFigures.map(fig => ({
+            study_id: studyId,
+            user_id: userId,
+            page_number: fig.pageNum,
+            figure_id: fig.id,
+            data_url: fig.dataUrl,
+            width: fig.width,
+            height: fig.height,
+            x: fig.x,
+            y: fig.y,
+            bbox_width: fig.width,
+            bbox_height: fig.height,
+            extraction_method: fig.extractionMethod,
+            color_space: fig.metadata.colorSpace,
+            has_alpha: fig.metadata.hasAlpha,
+            data_length: fig.metadata.dataLength,
+            caption: fig.caption || null,
+            ai_enhanced: fig.aiEnhanced || false
+          }));
+
+          const { error: figureError } = await supabase
+            .from('pdf_figures' as any)
+            .insert(figureRecords as any);
+
+          if (figureError) {
+            console.error('Error saving re-extracted figures:', figureError);
+            toast.error(`Failed to save figures: ${figureError.message}`);
+          } else {
+            figuresCount = allFigures.length;
+            console.log(`✅ Re-extracted ${figuresCount} figures`);
+          }
+        }
+      } catch (figError: any) {
+        console.error('Error re-extracting figures:', figError);
+        toast.error(`Figure re-extraction failed: ${figError?.message}`);
+      }
+
+      // ===== Re-extract Tables =====
+      onProgress?.('Re-extracting tables...');
+      try {
+        const tablePdfDoc = await pdfjsLib.getDocument({
+          data: await pdfFile.arrayBuffer()
+        }).promise;
+
+        const { extractTablesFromPage } = await import('@/lib/pdfTableExtraction');
+        const allTables: any[] = [];
+
+        for (let pageNum = 1; pageNum <= tablePdfDoc.numPages; pageNum++) {
+          onProgress?.(`Extracting tables: page ${pageNum}/${tablePdfDoc.numPages}...`);
+          
+          const page = await tablePdfDoc.getPage(pageNum);
+          const tables = await extractTablesFromPage(page, pageNum);
+          allTables.push(...tables);
+        }
+
+        if (allTables.length > 0) {
+          // Delete old tables first
+          await supabase
+            .from('pdf_tables' as any)
+            .delete()
+            .eq('study_id', studyId);
+
+          const tableRecords = allTables.map((table: any) => ({
+            study_id: studyId,
+            user_id: userId,
+            table_id: table.id,
+            page_number: table.pageNum,
+            x: table.boundingBox.x,
+            y: table.boundingBox.y,
+            bbox_width: table.boundingBox.width,
+            bbox_height: table.boundingBox.height,
+            headers: table.headers,
+            rows: table.rows,
+            column_count: table.headers.length,
+            row_count: table.rows.length,
+            column_positions: table.columnPositions,
+            extraction_method: table.extractionMethod,
+            caption: table.caption || null,
+            ai_enhanced: false,
+            confidence_score: null
+          }));
+
+          const { error: tableError } = await supabase
+            .from('pdf_tables' as any)
+            .insert(tableRecords as any);
+
+          if (tableError) {
+            console.error('Error saving re-extracted tables:', tableError);
+            toast.error(`Failed to save tables: ${tableError.message}`);
+          } else {
+            tablesCount = allTables.length;
+            console.log(`✅ Re-extracted ${tablesCount} tables`);
+          }
+        }
+      } catch (tableError: any) {
+        console.error('Error re-extracting tables:', tableError);
+        toast.error(`Table re-extraction failed: ${tableError?.message}`);
+      }
+
+      onProgress?.('Re-extraction complete!');
+      
+      if (figuresCount > 0 || tablesCount > 0) {
+        toast.success(`Re-extracted ${figuresCount} figures and ${tablesCount} tables`);
+        return { figures: figuresCount, tables: tablesCount, success: true };
+      } else {
+        toast.info('No figures or tables found in this PDF');
+        return { figures: 0, tables: 0, success: true };
+      }
+    } catch (error: any) {
+      console.error('Error during re-extraction:', error);
+      toast.error(`Re-extraction failed: ${error?.message || 'Unknown error'}`);
+      return { figures: 0, tables: 0, success: false };
+    }
+  };
+
   // Bulk reprocess all studies with missing chunks
   const bulkReprocessStudies = async (
     onProgress?: (progress: {
@@ -1000,9 +1171,11 @@ export const useStudyStorage = (userId: string | null) => {
     getAllStudies,
     loadStudyPdf,
     reprocessStudy,
+    reextractVisuals,
     bulkReprocessStudies,
     savePageAnnotations,
     loadPageAnnotations,
+    matchFigureCaptions,
     loadStudyFigures,
   };
 };
