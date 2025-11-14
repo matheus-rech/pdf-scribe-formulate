@@ -14,6 +14,7 @@ import { detectSourceCitations, type SourceCitation } from "@/lib/citationDetect
 import { AuditReportDialog } from "@/components/AuditReportDialog";
 import { BatchRevalidationDialog } from "@/components/BatchRevalidationDialog";
 import { ExportDialog } from "@/components/ExportDialog";
+import { BulkStudyExportDialog } from "@/components/BulkStudyExportDialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -51,6 +52,7 @@ const Index = () => {
   const [studies, setStudies] = useState<any[]>([]);
   const [isCreatingStudy, setIsCreatingStudy] = useState(false);
   const [highlightedSources, setHighlightedSources] = useState<SourceCitation[]>([]);
+  const [pdfAnnotations, setPdfAnnotations] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Panel collapse states
@@ -505,6 +507,7 @@ const Index = () => {
             studySections={currentStudy?.pdf_chunks?.sections}
             onBatchExtract={handleBatchExtract}
             isBatchExtracting={isBatchExtracting}
+            onAnnotationsChange={setPdfAnnotations}
             />
           </div>
         </ResizablePanel>
@@ -574,11 +577,19 @@ const Index = () => {
               onUpdateExtractions={handleBatchUpdateExtractions}
             />
             {currentStudy && (
-              <ExportDialog
-                studyId={currentStudy.id}
-                studyName={currentStudy.name}
-              />
-              )}
+              <>
+                <ExportDialog
+                  studyId={currentStudy.id}
+                  studyName={currentStudy.name}
+                  annotations={pdfAnnotations}
+                />
+                <BulkStudyExportDialog
+                  studies={studies}
+                  currentStudyAnnotations={pdfAnnotations}
+                  currentStudyId={currentStudy.id}
+                />
+              </>
+            )}
               </div>
             </div>
             <TraceLog
