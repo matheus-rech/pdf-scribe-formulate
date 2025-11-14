@@ -171,7 +171,7 @@ const Index = () => {
     if (userId) {
       getAllStudies().then(setStudies);
     }
-  }, [userId]);
+  }, [userId, getAllStudies]);
 
   // Load extractions when study is selected
   useEffect(() => {
@@ -179,7 +179,7 @@ const Index = () => {
       loadExtractions(currentStudy.id).then(setExtractions);
       loadStudyFigures(currentStudy.id).then(setExtractedFigures);
     }
-  }, [currentStudy]);
+  }, [currentStudy, loadExtractions, loadStudyFigures]);
 
   // Create study and upload PDF when totalPages is available
   useEffect(() => {
@@ -237,7 +237,7 @@ const Index = () => {
         }
       });
     }
-  }, [pdfFile, totalPages, currentStudy]);
+  }, [pdfFile, totalPages, isCreatingStudy, currentStudy, createStudy, getAllStudies]);
 
   const handleExtraction = (entry: ExtractionEntry) => {
     setExtractions(prev => [...prev, entry]);

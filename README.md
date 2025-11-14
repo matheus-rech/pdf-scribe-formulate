@@ -83,15 +83,14 @@ Get these values from your [Supabase project settings](https://app.supabase.com)
 The project includes database migrations in `supabase/migrations/`. To apply them:
 
 ```bash
-# Install Supabase CLI
-npm install -g supabase
-
-# Link to your project
-supabase link --project-ref your-project-id
+# Link to your project (using npx for project-specific CLI)
+npx supabase link --project-ref your-project-id
 
 # Push migrations
-supabase db push
+npx supabase db push
 ```
+
+> **Note**: We recommend using `npx supabase` instead of installing globally to avoid version conflicts across projects. If you prefer a global installation, you can run `npm install -g supabase`, but this is optional.
 
 ## Development
 
@@ -159,7 +158,7 @@ npm run test:e2e:headed
 npm run lint
 ```
 
-**Known Issue**: The codebase currently has 351 linting issues (mostly `any` types). These are tracked for gradual improvement in [GitHub Issue #123: Linting Cleanup Roadmap](https://github.com/lovable-dev/pdf-scribe-formulate/issues/123). We aim to reduce linting issues by 50% each release; contributors are encouraged to reference this issue for progress and coordination.
+**Known Issue**: The codebase currently has 351 linting issues (mostly `any` types). These are tracked for gradual improvement in [GitHub Issues](https://github.com/matheus-rech/pdf-scribe-formulate/issues?q=is%3Aissue+is%3Aopen+label%3Alinting). We aim to reduce linting issues incrementally with each release; contributors are encouraged to fix linting issues in code they modify.
 
 ## Project Structure
 
@@ -221,9 +220,9 @@ The extraction process is divided into 8 steps:
 2. **Linting Errors**: 351 linting issues (329 `any` types, 22 React Hook warnings).
 3. **E2E Test Fixtures**: Sample PDF files need to be added to `e2e/fixtures/`.
 4. **Large Components**: Some components exceed 1,000 lines and could be refactored.
-5. **Security Vulnerabilities**: 4 npm vulnerabilities (2 moderate, 2 high) detected by `npm audit`. 
+5. **Security Vulnerabilities**: 4 npm vulnerabilities (2 moderate, 2 high) detected by `npm audit`.
    - **Scope**: All vulnerabilities are currently limited to dev dependencies and do **not** affect production code.
-   - **Remediation Plan**: Dependencies will be updated and vulnerabilities resolved in the next release cycle. Track progress in [GitHub Issues](https://github.com/your-org/your-repo/issues).
+   - **Remediation Plan**: Dependencies will be updated and vulnerabilities resolved in the next release cycle. Run `npm audit` for full details.
 
 ## Performance Notes
 
