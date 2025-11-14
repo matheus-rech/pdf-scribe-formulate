@@ -71,7 +71,13 @@ export const useStudyStorage = (userId: string | null) => {
           upsert: false
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('PDF upload error:', uploadError);
+        toast.error(`Upload failed: ${uploadError.message}`);
+        throw uploadError;
+      }
+      
+      console.log(`✅ PDF uploaded successfully: ${fileName}`);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
@@ -139,7 +145,13 @@ export const useStudyStorage = (userId: string | null) => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Study creation error:', error);
+        toast.error(`Failed to create study: ${error.message}`);
+        throw error;
+      }
+      
+      console.log(`✅ Study created successfully: ${data.id}`);
 
       // Extract figures from PDF
       onProgress?.({
@@ -195,8 +207,12 @@ export const useStudyStorage = (userId: string | null) => {
             .insert(figureRecords as any);
 
           if (figureError) {
-            console.error('Error saving figures:', figureError);
-            toast.error('Figures extracted but failed to save to database');
+            console.error('❌ Error saving figures to database:', figureError);
+            toast.error(`Failed to save figures: ${figureError.message || 'Unknown error'}`);
+            // Check if it's an auth/RLS issue
+            if (figureError.message?.includes('policy') || figureError.message?.includes('permission')) {
+              toast.error('Authentication issue: Please ensure you are logged in');
+            }
           } else {
             console.log(`✅ Saved ${allFigures.length} figures to database`);
             
@@ -285,14 +301,18 @@ export const useStudyStorage = (userId: string | null) => {
             confidence_score: null
           }));
 
-          const { error: tableError } = await supabase
-            .from('pdf_tables' as any)
-            .insert(tableRecords as any);
+            const { error: tableError } = await supabase
+              .from('pdf_tables' as any)
+              .insert(tableRecords as any);
 
-          if (tableError) {
-            console.error('Error saving tables:', tableError);
-            toast.error('Tables extracted but failed to save to database');
-          } else {
+            if (tableError) {
+              console.error('❌ Error saving tables to database:', tableError);
+              toast.error(`Failed to save tables: ${tableError.message || 'Unknown error'}`);
+              // Check if it's an auth/RLS issue
+              if (tableError.message?.includes('policy') || tableError.message?.includes('permission')) {
+                toast.error('Authentication issue: Please ensure you are logged in');
+              }
+            } else {
             console.log(`✅ Saved ${allTables.length} tables to database`);
             
             // Enhance captions with AI
@@ -372,10 +392,9 @@ export const useStudyStorage = (userId: string | null) => {
             }
           }
         }
-      } catch (tableError) {
-        console.error('Error extracting tables:', tableError);
-        // Don't fail the entire study creation
-        toast.error('Failed to extract tables, but study was created');
+      } catch (tableError: any) {
+        console.error('❌ Error extracting tables:', tableError);
+        toast.error(`Table extraction failed: ${tableError?.message || 'Unknown error'}`);
       }
 
       // ========= Phase 3: Text Chunk Extraction with Coordinates =========
@@ -455,16 +474,19 @@ export const useStudyStorage = (userId: string | null) => {
             .insert(chunkRecords as any);
 
           if (chunksError) {
-            console.error('Error saving text chunks:', chunksError);
-            toast.error('Text chunks extracted but failed to save to database');
+            console.error('❌ Error saving text chunks to database:', chunksError);
+            toast.error(`Failed to save text chunks: ${chunksError.message || 'Unknown error'}`);
+            // Check if it's an auth/RLS issue
+            if (chunksError.message?.includes('policy') || chunksError.message?.includes('permission')) {
+              toast.error('Authentication issue: Please ensure you are logged in');
+            }
           } else {
             console.log(`✅ Saved ${allTextChunks.length} text chunks with citation provenance`);
           }
         }
-      } catch (chunkError) {
-        console.error('Error extracting text chunks:', chunkError);
-        // Don't fail the entire study creation
-        toast.error('Failed to extract text chunks, but study was created');
+      } catch (chunkError: any) {
+        console.error('❌ Error extracting text chunks:', chunkError);
+        toast.error(`Text chunk extraction failed: ${chunkError?.message || 'Unknown error'}`);
       }
 
       onProgress?.({
@@ -494,14 +516,39 @@ export const useStudyStorage = (userId: string | null) => {
     }
   };
 
-  // Save extraction
+  // Save extraction with automatic citation detection
   const saveExtraction = async (studyId: string, extraction: ExtractionEntry) => {
     if (!userId) {
-      toast.error("User ID required");
+      toast.error("User ID required - please log in");
       return;
     }
 
     try {
+      // Auto-detect source citations if not already provided
+      let sourceCitations = extraction.sourceCitations;
+      
+      if (!sourceCitations && extraction.text && currentStudy?.pdf_chunks) {
+        console.log('🔍 Auto-detecting citations for extraction:', extraction.fieldName);
+        const { detectSourceCitations } = await import('@/lib/citationDetector');
+        
+        // Use pre-processed chunks from the study
+        const preProcessedChunks = (currentStudy.pdf_chunks as any)?.pageChunks || [];
+        
+        if (preProcessedChunks.length > 0) {
+          const detectionResult = await detectSourceCitations(
+            extraction.text,
+            null as any, // We don't need the PDF file since we have pre-processed chunks
+            extraction.page,
+            preProcessedChunks
+          );
+          
+          if (detectionResult.sourceCitations.length > 0) {
+            sourceCitations = detectionResult.sourceCitations;
+            console.log(`✅ Auto-detected ${sourceCitations.length} citations with confidence ${detectionResult.confidence}`);
+          }
+        }
+      }
+
       const { error } = await supabase.from("extractions").insert({
         study_id: studyId,
         user_id: userId,
@@ -513,13 +560,19 @@ export const useStudyStorage = (userId: string | null) => {
         method: extraction.method,
         timestamp: extraction.timestamp.toISOString(),
         image_data: extraction.imageData || null,
-        source_citations: extraction.sourceCitations || null,
+        source_citations: sourceCitations || null,
       } as any);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error saving extraction to database:', error);
+        toast.error(`Failed to save extraction: ${error.message || 'Unknown error'}`);
+        throw error;
+      }
+      
+      console.log(`✅ Saved extraction: ${extraction.fieldName}`);
     } catch (error: any) {
       console.error("Error saving extraction:", error);
-      toast.error("Failed to save extraction");
+      toast.error(`Failed to save extraction: ${error?.message || 'Unknown error'}`);
     }
   };
 
