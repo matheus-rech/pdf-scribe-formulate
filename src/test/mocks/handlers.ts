@@ -79,14 +79,11 @@ export const handlers = [
         study_id: studyId,
         field_name: 'study_design',
         text: 'Randomized controlled trial',
-        source_citations: [
-          {
-            chunkIndex: 5,
-            pageNum: 2,
-            text: 'This was a randomized controlled trial.',
-            confidence: 0.95
-          }
-        ],
+        source_citations: {
+          chunk_indices: [5],
+          confidence: 95,
+          source_quote: 'This was a randomized controlled trial.'
+        },
         confidence_score: 0.95,
         validation_status: 'validated',
         page: 2
@@ -96,14 +93,11 @@ export const handlers = [
         study_id: studyId,
         field_name: 'sample_size',
         text: '150 patients',
-        source_citations: [
-          {
-            chunkIndex: 8,
-            pageNum: 3,
-            text: 'A total of 150 patients were enrolled.',
-            confidence: 0.88
-          }
-        ],
+        source_citations: {
+          chunk_indices: [8],
+          confidence: 88,
+          source_quote: 'A total of 150 patients were enrolled.'
+        },
         confidence_score: 0.88,
         validation_status: 'validated',
         page: 3

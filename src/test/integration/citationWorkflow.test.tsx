@@ -34,14 +34,11 @@ describe('Citation Workflow Integration', () => {
               id: 'extraction-1',
               field_name: 'study_design',
               text: 'Randomized controlled trial',
-              source_citations: [
-                {
-                  chunkIndex: 5,
-                  pageNum: 2,
-                  text: 'This was a randomized controlled trial.',
-                  confidence: 0.95
-                }
-              ],
+              source_citations: {
+                chunk_indices: [5],
+                confidence: 95,
+                source_quote: 'This was a randomized controlled trial.'
+              },
               validation_status: 'validated',
               page: 2
             }
@@ -56,7 +53,7 @@ describe('Citation Workflow Integration', () => {
     expect(screen.getByText('Randomized controlled trial')).toBeInTheDocument()
     
     // Check citation indicators
-    expect(screen.getByText(/1 source/)).toBeInTheDocument()
+    expect(screen.getByText(/1 citation/)).toBeInTheDocument()
   })
 
   it('should display multiple extractions with different citation counts', () => {
@@ -71,9 +68,11 @@ describe('Citation Workflow Integration', () => {
               id: 'extraction-1',
               field_name: 'study_design',
               text: 'RCT',
-              source_citations: [
-                { chunkIndex: 5, pageNum: 2, text: 'Source 1', confidence: 0.95 }
-              ],
+              source_citations: {
+                chunk_indices: [5],
+                confidence: 95,
+                source_quote: 'Source 1'
+              },
               validation_status: 'validated',
               page: 2
             },
@@ -81,10 +80,11 @@ describe('Citation Workflow Integration', () => {
               id: 'extraction-2',
               field_name: 'sample_size',
               text: '150',
-              source_citations: [
-                { chunkIndex: 8, pageNum: 3, text: 'Source 1', confidence: 0.90 },
-                { chunkIndex: 9, pageNum: 3, text: 'Source 2', confidence: 0.85 }
-              ],
+              source_citations: {
+                chunk_indices: [8, 9],
+                confidence: 87,
+                source_quote: 'Source 1 and Source 2'
+              },
               validation_status: 'validated',
               page: 3
             }
@@ -93,8 +93,8 @@ describe('Citation Workflow Integration', () => {
       </QueryClientProvider>
     )
     
-    expect(screen.getByText(/1 source/)).toBeInTheDocument()
-    expect(screen.getByText(/2 sources/)).toBeInTheDocument()
+    expect(screen.getByText(/1 citation/)).toBeInTheDocument()
+    expect(screen.getByText(/2 citations/)).toBeInTheDocument()
   })
 
   it('should handle extractions with no citations', () => {
@@ -118,6 +118,7 @@ describe('Citation Workflow Integration', () => {
     )
     
     expect(screen.getByText('study_design')).toBeInTheDocument()
-    expect(screen.queryByText(/source/)).not.toBeInTheDocument()
+    // Should not show citation count for extractions without citations
+    expect(screen.queryByText(/\d+ citation/)).not.toBeInTheDocument()
   })
 })
