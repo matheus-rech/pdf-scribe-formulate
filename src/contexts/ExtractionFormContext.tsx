@@ -29,7 +29,7 @@ export interface MortalityData {
 
 export interface ExtractionFormState {
   currentStep: number;
-  formData: Record<string, string>;
+  formData: Record<string, unknown>;
   studyArms: StudyArm[];
   indications: Indication[];
   interventions: Intervention[];
