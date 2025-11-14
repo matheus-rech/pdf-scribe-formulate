@@ -151,15 +151,73 @@ export const validateCrossStepData = (formData: Record<string, any>): Validation
   return warnings;
 };
 
-export const getAutoFix = (warning: ValidationWarning, formData: Record<string, any>): any => {
+export const getAutoFix = (warning: ValidationWarning, formData: Record<string, any>): Record<string, any> | null => {
   if (!warning.autoFixable) return null;
 
   switch (warning.field) {
     case 'totalN': {
+      // Fix total N by summing surgical and control N
       const surgicalN = parseInt(formData.surgicalN) || 0;
       const controlN = parseInt(formData.controlN) || 0;
-      return { totalN: surgicalN + controlN };
+      const fixedTotal = surgicalN + controlN;
+      
+      if (fixedTotal === 0) return null;
+      
+      return { 
+        totalN: fixedTotal.toString()
+      };
     }
+    
+    case 'ageMean': {
+      // Fix age mean to be within IQR range
+      const ageIQR_lower = parseFloat(formData.ageIQR_lower) || 0;
+      const ageIQR_upper = parseFloat(formData.ageIQR_upper) || 0;
+      
+      if (ageIQR_lower === 0 || ageIQR_upper === 0) return null;
+      
+      // Set mean to midpoint of IQR
+      const fixedMean = ((ageIQR_lower + ageIQR_upper) / 2).toFixed(1);
+      
+      return {
+        ageMean: fixedMean
+      };
+    }
+    
+    case 'studyArms': {
+      // Fix study arms to match total N by proportionally adjusting
+      if (!formData.studyArms || !Array.isArray(formData.studyArms)) return null;
+      
+      const totalN = parseInt(formData.totalN) || 0;
+      if (totalN === 0) return null;
+      
+      const currentSum = formData.studyArms.reduce((sum: number, arm: any) => {
+        return sum + (parseInt(arm.n) || 0);
+      }, 0);
+      
+      if (currentSum === 0) return null;
+      
+      // Calculate adjustment factor
+      const factor = totalN / currentSum;
+      
+      // Adjust each arm proportionally and round
+      const fixedArms = formData.studyArms.map((arm: any, index: number) => {
+        const currentN = parseInt(arm.n) || 0;
+        let adjustedN = Math.round(currentN * factor);
+        
+        return { ...arm, n: adjustedN.toString() };
+      });
+      
+      // Adjust last arm to exactly match totalN (handle rounding errors)
+      const newSum = fixedArms.reduce((sum: number, arm: any) => sum + parseInt(arm.n), 0);
+      if (newSum !== totalN && fixedArms.length > 0) {
+        const diff = totalN - newSum;
+        const lastIndex = fixedArms.length - 1;
+        fixedArms[lastIndex].n = (parseInt(fixedArms[lastIndex].n) + diff).toString();
+      }
+      
+      return { studyArms: fixedArms };
+    }
+    
     default:
       return null;
   }

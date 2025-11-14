@@ -33,7 +33,9 @@ import { Step6StudyArms } from "./extraction-steps/Step6StudyArms";
 import { Step7Outcomes } from "./extraction-steps/Step7Outcomes";
 import { Step8Complications } from "./extraction-steps/Step8Complications";
 import { ExtractionQualityScore } from "./ExtractionQualityScore";
-import { validateCrossStepData } from "@/lib/crossStepValidation";
+import { validateCrossStepData, getAutoFix } from "@/lib/crossStepValidation";
+import type { ValidationWarning } from "@/lib/crossStepValidation";
+import { ValidationWarningCard } from "./ValidationWarningCard";
 
 interface ExtractionFormProps {
   activeField: string | null;
@@ -148,6 +150,10 @@ export const ExtractionForm = ({
   }>>({});
   const [validatingFields, setValidatingFields] = useState<Set<string>>(new Set());
   const [validatedFields, setValidatedFields] = useState<Set<string>>(new Set());
+  
+  // Cross-step validation state
+  const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([]);
+  const [dismissedWarnings, setDismissedWarnings] = useState<Set<number>>(new Set());
   
   // Auto-save state
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'unsaved'>('saved');
@@ -884,6 +890,60 @@ export const ExtractionForm = ({
     loadSavedData();
   }, [studyId]);
 
+  // Run cross-step validation when relevant data changes
+  useEffect(() => {
+    const dataToValidate = {
+      ...formData,
+      studyArms,
+      mortalityData,
+      mrsData
+    };
+    
+    const warnings = validateCrossStepData(dataToValidate);
+    setValidationWarnings(warnings);
+    
+    // Clear dismissed warnings when new warnings appear
+    if (warnings.length > 0) {
+      setDismissedWarnings(new Set());
+    }
+  }, [formData, studyArms, mortalityData, mrsData]);
+
+  const handleAutoFix = (warning: ValidationWarning) => {
+    const dataToFix = {
+      ...formData,
+      studyArms,
+      mortalityData,
+      mrsData
+    };
+    
+    const fix = getAutoFix(warning, dataToFix);
+    
+    if (!fix) {
+      toast.error("Could not auto-fix this warning");
+      return;
+    }
+    
+    // Apply the fix
+    if (fix.studyArms) {
+      setStudyArms(fix.studyArms);
+      toast.success("Study arms adjusted to match total N");
+    } else {
+      setFormData(prev => ({ ...prev, ...fix }));
+      toast.success(`Auto-fixed: ${warning.field}`);
+    }
+  };
+
+  const handleDismissWarning = (index: number) => {
+    setDismissedWarnings(prev => {
+      const newSet = new Set(prev);
+      newSet.add(index);
+      return newSet;
+    });
+  };
+
+  // Filter out dismissed warnings
+  const activeWarnings = validationWarnings.filter((_, index) => !dismissedWarnings.has(index));
+
   const getSaveStatusIcon = () => {
     switch (saveStatus) {
       case 'saving':
@@ -1037,6 +1097,15 @@ export const ExtractionForm = ({
             )}
           </div>
         </div>
+
+        {/* Validation Warnings with Auto-Fix */}
+        {activeWarnings.length > 0 && (
+          <ValidationWarningCard
+            warnings={activeWarnings}
+            onAutoFix={handleAutoFix}
+            onDismiss={handleDismissWarning}
+          />
+        )}
 
         {/* Step Indicator and Quality Score */}
         <div className="flex items-center justify-between mb-4 gap-4">
