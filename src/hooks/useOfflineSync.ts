@@ -83,24 +83,31 @@ export const useOfflineSync = () => {
           if (item.type === 'extraction') {
             // Sync extraction data
             const { error } = await supabase
-              .from('study_extractions')
+              .from('study_extractions' as any)
               .upsert({
-                ...item.data,
+                id: item.data.id,
+                study_id: item.data.studyId,
+                data: item.data.data,
+                annotations: item.data.annotations || [],
                 user_id: user.id,
                 updated_at: new Date().toISOString(),
-              });
+              } as any);
 
             if (error) throw error;
             await offlineStorage.markExtractionSynced(item.data.id);
           } else if (item.type === 'annotation') {
             // Sync annotation data
             const { error } = await supabase
-              .from('pdf_annotations')
+              .from('pdf_annotations' as any)
               .upsert({
-                ...item.data,
+                id: item.data.id,
+                page_number: item.data.pageNumber,
+                type: item.data.type,
+                content: item.data.content,
+                study_id: item.data.studyId || null,
                 user_id: user.id,
                 updated_at: new Date().toISOString(),
-              });
+              } as any);
 
             if (error) throw error;
             await offlineStorage.markAnnotationSynced(item.data.id);

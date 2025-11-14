@@ -16,17 +16,4 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ['react', 'react-dom'],
   },
-  build: {
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'index.html'),
-        sw: path.resolve(__dirname, 'public/service-worker.js'),
-      },
-      output: {
-        entryFileNames: (chunkInfo) => {
-          return chunkInfo.name === 'sw' ? 'service-worker.js' : 'assets/[name]-[hash].js';
-        },
-      },
-    },
-  },
 }));
