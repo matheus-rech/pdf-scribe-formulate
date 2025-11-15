@@ -224,12 +224,69 @@ export function getTextItemsInRange(
   const pageCharStart = charStart - pageChunk.charStart;
   const pageCharEnd = charEnd - pageChunk.charStart;
 
-  const matchingItems: TextItem[] = [];
+  const originalItems = pageChunk.textItems || [];
 
-  for (const item of pageChunk.textItems) {
-    const itemStart = item.charStart ?? 0;
-    const itemEnd = item.charEnd ?? (itemStart + (item.text?.length || 0));
-    // Check if item overlaps with target range
+  // If items already have charStart/charEnd, use them directly.
+  // Detect this by checking the first item (if any).
+  const firstHasOffsets = originalItems.length > 0 && (
+    originalItems[0].charStart !== undefined && originalItems[0].charEnd !== undefined
+  );
+
+  let itemsToUse: TextItem[];
+
+  if (firstHasOffsets) {
+    itemsToUse = originalItems;
+  } else {
+    // Legacy chunk: compute page-local offsets for each item in memory.
+    // We normalize each item's text (collapse whitespace) and join with single space,
+    // assigning charStart/charEnd to the normalized tokens. This mirrors
+    // the normalization logic used by extractTextWithCoordinatesFromPdf().
+    const normalizedTokens: string[] = [];
+    const rawItems: TextItem[] = [];
+
+    for (const it of originalItems) {
+      // Collapse internal whitespace and trim
+      const norm = (it.text || '').replace(/\s+/g, ' ').trim();
+      if (norm.length === 0) {
+        // skip empty tokens but keep original shape
+        continue;
+      }
+      normalizedTokens.push(norm);
+      rawItems.push(it);
+    }
+
+    // Build pageText from normalized tokens (mirrors extraction logic)
+    // and compute page-relative offsets for each token.
+    const computedItems: TextItem[] = [];
+    let cursor = 0;
+    for (let i = 0; i < normalizedTokens.length; i++) {
+      const t = normalizedTokens[i];
+      const raw = rawItems[i];
+
+      const start = cursor;
+      const end = start + t.length - 1;
+
+      // create a shallow copy with computed offsets. Retain coordinates.
+      computedItems.push({
+        ...raw,
+        text: t,
+        charStart: start,
+        charEnd: end
+      });
+
+      // Advance cursor by t.length + 1 (the joining space)
+      cursor = end + 2;
+    }
+
+    itemsToUse = computedItems;
+  }
+
+  // Now select items that overlap the requested page-relative range
+  const matchingItems: TextItem[] = [];
+  for (const item of itemsToUse) {
+    const itemStart = (item.charStart ?? 0);
+    const itemEnd = (item.charEnd ?? (itemStart + (item.text?.length || 0)));
+
     if (itemEnd >= pageCharStart && itemStart <= pageCharEnd) {
       matchingItems.push(item);
     }
