@@ -45,7 +45,7 @@ export async function detectSourceCitations(
         maxResults: 10,
         pageLimit: pageNumber ? [pageNumber] : undefined
       });
-      
+
       if (matches.length === 0) {
         return {
           sourceCitations: [],
@@ -53,16 +53,16 @@ export async function detectSourceCitations(
           method: 'not-found'
         };
       }
-      
+
       const citations: SourceCitation[] = matches.map(match => {
         const textItems = getTextItemsInRange(
           match.chunk,
           match.chunk.charStart + match.matchIndex,
           match.chunk.charStart + match.matchIndex + match.matchLength
         );
-        
+
         const bounds = calculateBoundingBox(textItems);
-        
+
         return {
           id: `citation-${Date.now()}-${Math.random()}`,
           page: match.chunk.page,
@@ -72,22 +72,22 @@ export async function detectSourceCitations(
           confidence: match.confidence
         };
       });
-      
+
       return {
         sourceCitations: citations,
         confidence: citations[0]?.confidence || 0,
         method: 'exact-match'
       };
     }
-    
+
     // Fallback: extract on-demand (old behavior)
     const pagesToSearch = pageNumber ? [pageNumber] : await getAllPageNumbers(pdfFile);
     const allMatches: SourceCitation[] = [];
 
     for (const page of pagesToSearch.slice(0, 5)) {
-      const { items: textItems } = await extractTextWithCoordinates(pdfFile, page);
+      const { items: textItems, pageText } = await extractTextWithCoordinates(pdfFile, page);
 
-      const exactMatches = findExactMatches(extractedText, textItems, page);
+      const exactMatches = findExactMatches(extractedText, textItems, page, pageText);
       if (exactMatches.length > 0) {
         return {
           sourceCitations: exactMatches,
@@ -125,40 +125,82 @@ async function getAllPageNumbers(pdfFile: File): Promise<number[]> {
   return Array.from({ length: 10 }, (_, i) => i + 1);
 }
 
-function findExactMatches(
+/**
+ * Normalize the query text using the same approach as pageText
+ */
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, '')
+    .trim();
+}
+
+/**
+ * Create a normalized string for the fullText and keep a mapping from normalized index -> original index.
+ * This allows translating normalized match positions back to original positions reliably.
+ */
+function normalizeWithIndexMap(text: string) {
+  const normChars: string[] = [];
+  const normToOriginal: number[] = [];
+  let lastWasSpace = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const isWord = /[A-Za-z0-9]/.test(ch);
+    if (!isWord) {
+      if (!lastWasSpace) {
+        normChars.push(' ');
+        normToOriginal.push(i);
+        lastWasSpace = true;
+      } else {
+        // multiple non-word chars collapsed: we do not append but we still advance
+        // do not push a mapping because normalized string doesn't add a char
+      }
+    } else {
+      normChars.push(ch.toLowerCase());
+      normToOriginal.push(i);
+      lastWasSpace = false;
+    }
+  }
+
+  return { normalized: normChars.join(''), normToOriginal };
+}
+
+/**
+ * Find exact matches by searching the normalized page text, mapping matches back to original
+ * page indices using normalizeWithIndexMap, and selecting TextItems by their charStart/charEnd.
+ */
+export function findExactMatches(
   query: string,
   textItems: TextItem[],
-  page: number
+  page: number,
+  pageText: string
 ): SourceCitation[] {
   const matches: SourceCitation[] = [];
+  if (!pageText || pageText.length === 0) return matches;
+
   const queryNormalized = normalizeText(query);
+  // Build normalized map for the full pageText
+  const { normalized: fullTextNormalized, normToOriginal } = normalizeWithIndexMap(pageText);
 
-  // Build continuous text with position tracking
-  let fullText = '';
-  const positionMap: { index: number; item: TextItem }[] = [];
+  let startIdxNorm = fullTextNormalized.indexOf(queryNormalized);
+  while (startIdxNorm !== -1) {
+    const endIdxNorm = startIdxNorm + queryNormalized.length;
+    // Translate normalized indices to original char indices (approx)
+    const origStart = normToOriginal[startIdxNorm] ?? 0;
+    const origEnd = normToOriginal[endIdxNorm - 1] ?? (pageText.length - 1);
 
-  textItems.forEach(item => {
-    const startIndex = fullText.length;
-    fullText += item.text + ' ';
-    positionMap.push({ index: startIndex, item });
-  });
-
-  const fullTextNormalized = normalizeText(fullText);
-
-  // Find all occurrences
-  let startIdx = fullTextNormalized.indexOf(queryNormalized);
-
-  while (startIdx !== -1) {
-    const endIdx = startIdx + queryNormalized.length;
-
-    // Find which text items span this range
-    const spanningItems = positionMap.filter(
-      p => p.index >= startIdx - 50 && p.index <= endIdx + 50
-    );
+    // Find which text items span this original range using item's charStart/charEnd
+    const spanningItems = textItems.filter(item => {
+      const itemStart = item.charStart ?? 0;
+      const itemEnd = item.charEnd ?? (itemStart + (item.text?.length || 0));
+      return itemEnd >= origStart && itemStart <= origEnd;
+    });
 
     if (spanningItems.length > 0) {
-      const bounds = calculateBoundingBox(spanningItems.map(p => p.item));
-      const contextText = extractContext(fullText, startIdx, endIdx);
+      const bounds = calculateBoundingBox(spanningItems);
+      const contextText = extractContext(pageText, origStart, origEnd);
 
       matches.push({
         id: `citation-${Date.now()}-${Math.random()}`,
@@ -170,7 +212,7 @@ function findExactMatches(
       });
     }
 
-    startIdx = fullTextNormalized.indexOf(queryNormalized, endIdx);
+    startIdxNorm = fullTextNormalized.indexOf(queryNormalized, endIdxNorm);
   }
 
   return matches;
@@ -193,27 +235,22 @@ function findFuzzyMatches(
 
   const results = fuse.search(query);
 
-  return results.slice(0, 5).map(result => ({
-    id: `citation-${Date.now()}-${Math.random()}`,
-    page,
-    coordinates: {
-      x: result.item.x,
-      y: result.item.y,
-      width: result.item.width,
-      height: result.item.height
-    },
-    sourceText: result.item.text,
-    context: extractContextFromItems(textItems, result.refIndex || 0),
-    confidence: 1 - (result.score || 0.5)
-  }));
-}
-
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[^\w\s]/g, '')
-    .trim();
+  return results.slice(0, 5).map(result => {
+    const item = result.item;
+    return {
+      id: `citation-${Date.now()}-${Math.random()}`,
+      page,
+      coordinates: {
+        x: item.x,
+        y: item.y,
+        width: item.width,
+        height: item.height
+      },
+      sourceText: item.text,
+      context: extractContextFromItems(textItems, result.refIndex || 0),
+      confidence: 1 - (result.score || 0.5)
+    };
+  });
 }
 
 function calculateBoundingBox(items: TextItem[]): {
@@ -278,12 +315,11 @@ function extractContextFromChunk(
 ): string {
   const start = Math.max(0, matchIndex - contextChars);
   const end = Math.min(chunk.text.length, matchIndex + matchLength + contextChars);
-  
+
   let context = chunk.text.substring(start, end);
-  
+
   if (start > 0) context = '...' + context;
   if (end < chunk.text.length) context = context + '...';
-  
+
   return context;
 }
-

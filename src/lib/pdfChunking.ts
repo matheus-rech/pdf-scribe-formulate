@@ -1,4 +1,4 @@
-import { extractTextWithCoordinates, type TextItem } from './textExtraction';
+import { extractTextWithCoordinatesFromPdf, extractTextWithCoordinates, type TextItem } from './textExtraction';
 import * as pdfjsLib from 'pdfjs-dist';
 
 export interface SubChunk {
@@ -51,7 +51,7 @@ function createSubChunks(
 
   while (currentChunkStart < pageText.length) {
     const chunkEnd = Math.min(currentChunkStart + maxChunkSize, pageText.length);
-    
+
     // Find sentence boundary for cleaner splits
     let actualEnd = chunkEnd;
     if (chunkEnd < pageText.length) {
@@ -62,20 +62,16 @@ function createSubChunks(
     }
 
     const chunkText = pageText.slice(currentChunkStart, actualEnd).trim();
-    
-    // Find text items that belong to this chunk
-    let currentPos = 0;
+
+    // Find text items that belong to this chunk using item.charStart/charEnd
     const chunkTextItems: TextItem[] = [];
-    
+
     for (const item of textItems) {
-      const itemStart = currentPos;
-      const itemEnd = currentPos + item.text.length;
-      
+      const itemStart = item.charStart ?? 0;
+      const itemEnd = item.charEnd ?? (itemStart + (item.text?.length || 0));
       if (itemEnd >= currentChunkStart && itemStart <= actualEnd) {
         chunkTextItems.push(item);
       }
-      
-      currentPos = itemEnd + 1; // +1 for space
     }
 
     subChunks.push({
@@ -116,31 +112,25 @@ export async function processFullPDF(
   const arrayBuffer = await pdfFile.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
-  
+
   const totalPages = pdf.numPages;
   const pageChunks: PageChunk[] = [];
   let charOffset = 0;
-  
+
   for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
     onProgress?.(pageNum, totalPages);
-    
-    const { items: textItems } = await extractTextWithCoordinates(pdfFile, pageNum);
-    
-    // Concatenate all text for this page
-    const pageText = textItems
-      .map(item => item.text)
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
+
+    // Use the page-level extractor that does not reload the whole PDF
+    const { items: textItems, pageText } = await extractTextWithCoordinatesFromPdf(pdf, pageNum);
+
     const charStart = charOffset;
     const charEnd = charOffset + pageText.length;
-    
+
     // Create sub-chunks if enabled and page is large
-    const subChunks = useSubChunking 
+    const subChunks = useSubChunking
       ? createSubChunks(textItems, pageText, maxChunkSize, overlapSize, charStart)
       : [];
-    
+
     pageChunks.push({
       page: pageNum,
       text: pageText,
@@ -149,12 +139,12 @@ export async function processFullPDF(
       textItems,
       subChunks: subChunks.length > 0 ? subChunks : undefined
     });
-    
+
     charOffset = charEnd + 1; // +1 for page break
   }
-  
+
   return {
-    version: '2.0', // Increment version for sub-chunking support
+    version: '2.1', // Increment version for these changes
     processedAt: new Date().toISOString(),
     totalPages,
     pageChunks,
@@ -184,24 +174,24 @@ export function searchPageChunks(
   matchLength: number;
   confidence: number;
 }> {
-  const normalizedQuery = options.caseSensitive 
-    ? query 
+  const normalizedQuery = options.caseSensitive
+    ? query
     : query.toLowerCase();
-  
+
   const results = [];
-  
+
   for (const chunk of pageChunks) {
     // Skip if page not in limit
     if (options.pageLimit && !options.pageLimit.includes(chunk.page)) {
       continue;
     }
-    
-    const searchText = options.caseSensitive 
-      ? chunk.text 
+
+    const searchText = options.caseSensitive
+      ? chunk.text
       : chunk.text.toLowerCase();
-    
+
     let index = searchText.indexOf(normalizedQuery);
-    
+
     while (index !== -1) {
       results.push({
         chunk,
@@ -209,15 +199,15 @@ export function searchPageChunks(
         matchLength: query.length,
         confidence: 1.0 // Exact match
       });
-      
+
       if (options.maxResults && results.length >= options.maxResults) {
         return results;
       }
-      
+
       index = searchText.indexOf(normalizedQuery, index + 1);
     }
   }
-  
+
   return results;
 }
 
@@ -233,21 +223,17 @@ export function getTextItemsInRange(
   // Convert global char positions to page-relative positions
   const pageCharStart = charStart - pageChunk.charStart;
   const pageCharEnd = charEnd - pageChunk.charStart;
-  
-  let currentPos = 0;
+
   const matchingItems: TextItem[] = [];
-  
+
   for (const item of pageChunk.textItems) {
-    const itemStart = currentPos;
-    const itemEnd = currentPos + item.text.length;
-    
+    const itemStart = item.charStart ?? 0;
+    const itemEnd = item.charEnd ?? (itemStart + (item.text?.length || 0));
     // Check if item overlaps with target range
     if (itemEnd >= pageCharStart && itemStart <= pageCharEnd) {
       matchingItems.push(item);
     }
-    
-    currentPos = itemEnd + 1; // +1 for space between items
   }
-  
+
   return matchingItems;
 }
