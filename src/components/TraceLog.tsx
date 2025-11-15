@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Download, FileJson, FileSpreadsheet, FileText, Trash2, ImageIcon, Sparkles, Link2, MapPin, CheckCircle, CheckSquare, Search, FileDown } from "lucide-react";
+import { Download, FileJson, FileSpreadsheet, FileText, Trash2, Sparkles, Link2, MapPin, CheckCircle, CheckSquare, Search, FileDown } from "lucide-react";
 import type { ExtractionEntry } from "@/pages/Index";
 import { toast } from "sonner";
 import { OCRDialog } from "./OCRDialog";

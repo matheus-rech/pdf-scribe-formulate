@@ -64,7 +64,7 @@ export const useStudyStorage = (userId: string | null) => {
       const fileExt = pdfFile.name.split('.').pop();
       const fileName = `${userId}/${Date.now()}.${fileExt}`;
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('study-pdfs')
         .upload(fileName, pdfFile, {
           cacheControl: '3600',
@@ -166,7 +166,7 @@ export const useStudyStorage = (userId: string | null) => {
           data: await pdfFile.arrayBuffer()
         }).promise;
 
-        const { allFigures, allDiagnostics } = await extractAllFigures(
+        const { allFigures } = await extractAllFigures(
           pdfDoc,
           (current, total) => {
             const figProgress = 85 + (current / total) * 10; // 85-95%

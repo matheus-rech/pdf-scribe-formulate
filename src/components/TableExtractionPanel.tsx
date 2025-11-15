@@ -3,10 +3,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { 
   Table2, 
-  Download, 
   FileJson, 
   FileSpreadsheet, 
   Trash2,
@@ -175,7 +173,7 @@ export const TableExtractionPanel: React.FC<TableExtractionPanelProps> = ({
             ) : (
               <ScrollArea className="h-[400px]">
                 <div className="space-y-3">
-                  {tables.map((table, idx) => (
+                  {tables.map((table) => (
                     <Card key={table.id} className="p-3 hover:bg-accent/50 transition-colors">
                       <div className="space-y-2">
                         {/* Header */}

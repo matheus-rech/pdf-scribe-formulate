@@ -46,7 +46,6 @@ export async function extractAnnotationsFromPDF(file: File): Promise<AnnotationI
     // Iterate through all pages
     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
       const page = await pdfDoc.getPage(pageNum);
-      const pdfLibPage = pages[pageNum - 1];
       
       // Get annotations from the page
       const pageAnnotations = await page.getAnnotations();
@@ -189,6 +188,8 @@ export function matchAnnotationsToFields(
 
   annotations.forEach(annotation => {
     const annotationText = (annotation.content + " " + (annotation.selectedText || "")).toLowerCase();
+    
+    if (!annotationText) return;
     
     for (const [field, keywords] of Object.entries(fieldKeywords)) {
       if (keywords.some(keyword => annotationText.includes(keyword.toLowerCase()))) {

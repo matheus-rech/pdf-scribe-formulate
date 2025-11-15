@@ -26,7 +26,6 @@ import { useCanvasHistory } from "@/hooks/useCanvasHistory";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useTextHighlights } from "@/hooks/useTextHighlights";
 import { useBoundingBoxVisualization } from "@/hooks/useBoundingBoxVisualization";
-import { TextHighlight } from "@/types/highlights";
 import { navigateToPosition } from "@/lib/pdfNavigation";
 import type { SourceCitation } from "@/lib/citationDetector";
 import type { SearchResult } from "@/lib/pdfSearch";
@@ -89,12 +88,9 @@ export const PDFViewer = ({
   onAnnotationsChange,
   initialAnnotations = [],
   searchResults = [],
-  activeSearchIndex = 0,
   pdfDocRef,
   extractedFigures = [],
   studyId,
-  onNavigateToChunk,
-  activeCitationIndices = [],
 }: PDFViewerProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
