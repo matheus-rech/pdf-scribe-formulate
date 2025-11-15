@@ -29,7 +29,7 @@ export interface TextExtractionResult {
  * a pdf document object (pdfjsLib getDocument() result).
  */
 export async function extractTextWithCoordinatesFromPdf(
-  pdf: any,
+  pdf: pdfjsLib.PDFDocumentProxy,
   pageNumber: number,
   scale: number = 1.0
 ): Promise<TextExtractionResult> {
@@ -39,7 +39,13 @@ export async function extractTextWithCoordinatesFromPdf(
 
   // Build normalized item texts and compute pageText
   const normalizedItems: string[] = [];
-  const itemsRaw: any[] = [];
+  const itemsRaw: Array<{
+    str: string;
+    transform: number[];
+    width: number;
+    height: number;
+    fontName: string;
+  }> = [];
 
   for (const it of textContent.items) {
     if ('str' in it && it.str.trim().length > 0) {
@@ -106,6 +112,75 @@ export async function extractTextWithCoordinates(
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
   return extractTextWithCoordinatesFromPdf(pdf, pageNumber, scale);
+}
+
+/**
+ * Find text items within a rectangular region (in screen coordinates)
+ * and convert to PDF coordinates
+ */
+export function findTextInRegion(
+  textItems: TextItem[],
+  region: { x: number; y: number; width: number; height: number },
+  pageHeight: number,
+  scale: number = 1.0
+): { text: string; pdfCoords: { x: number; y: number; width: number; height: number } } {
+  // Convert screen coordinates to PDF coordinates
+  const pdfRegion = {
+    x: region.x / scale,
+    y: (pageHeight - region.y - region.height) / scale, // Flip Y axis
+    width: region.width / scale,
+    height: region.height / scale,
+  };
+
+  const matchingItems: TextItem[] = [];
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const item of textItems) {
+    const itemRight = item.x + item.width;
+    const itemTop = item.y + item.height;
+
+    // Check if item intersects with region
+    const intersects =
+      item.x < pdfRegion.x + pdfRegion.width &&
+      itemRight > pdfRegion.x &&
+      item.y < pdfRegion.y + pdfRegion.height &&
+      itemTop > pdfRegion.y;
+
+    if (intersects) {
+      matchingItems.push(item);
+      minX = Math.min(minX, item.x);
+      minY = Math.min(minY, item.y);
+      maxX = Math.max(maxX, itemRight);
+      maxY = Math.max(maxY, itemTop);
+    }
+  }
+
+  const text = matchingItems
+    .sort((a, b) => {
+      // Sort by Y first (top to bottom), then X (left to right)
+      const yDiff = b.y - a.y; // Reverse because PDF Y is bottom-up
+      if (Math.abs(yDiff) > 2) return yDiff > 0 ? -1 : 1;
+      return a.x - b.x;
+    })
+    .map(item => item.text)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Calculate bounding box in PDF coordinates
+  const pdfCoords = matchingItems.length > 0
+    ? {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+      }
+    : pdfRegion;
+
+  return { text, pdfCoords };
 }
 
 /**
