@@ -1,6 +1,5 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { InputWithHints } from "@/components/InputWithHints";
 
 interface Step3Props {
   formData: Record<string, string>;
