@@ -39,6 +39,11 @@ if (typeof window !== 'undefined') {
   };
 }
 
+// Mock DOMMatrix for pdfjs
+global.DOMMatrix = class DOMMatrix {
+  constructor() {}
+} as any;
+
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
   constructor() {}
